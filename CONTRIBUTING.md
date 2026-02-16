@@ -67,6 +67,20 @@ All changes should be submitted through a Pull Request (PR), which should includ
 * A description of how it was tested
 * Screenshots or logs if relevant (especially for Blender functionality)
 
+## Code Review Expectations
+
+All PRs must be reviewed before merging.
+
+As the primary contributor, the project maintainer performs a structured self-review prior to merge. Review includes:
+
+* Verifying the implementation meets the stated requirement(s)
+* Confirming no runtime errors are introduced
+* Checking for unnecessary complexity or redundant code
+* Ensuring consistency in naming, formatting, and structure
+* Confirming that manual testing has been completed
+
+If external contributors are added in the future, at least one approving review will be required before merging into the main branch.
+
 ## Definition of Done (DoD)
 
 A contribution is considered complete when:
