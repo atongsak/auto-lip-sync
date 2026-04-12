@@ -1,4 +1,4 @@
-# auto-lip-sync
+# Artist-Driven Auto Lip Sync Blender Add-on
 A Blender add-on that does a first pass of lip sync animation given input audio.
 
 # Overview
