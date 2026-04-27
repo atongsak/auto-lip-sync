@@ -14,15 +14,13 @@ cd auto-lip-sync``
 
 **2. Python Environment**
 
-The audio-to-phoneme extraction pipeline is currently developed and tested in Google Colab.
+The audio-to-phoneme extraction pipeline is currently developed and tested on my local machine.
 
-At this stage of development, dependencies are installed directly within the Colab notebook for reproducibility during testing. No finalized local environment configuration is required yet.
+The pipeline has been verified with the following versions (if using GPU compute, using CUDA 12.8):
 
-The pipeline has been verified with the following versions:
-
-* `torch==2.3.1+cu121`
-* `torchvision==0.18.1+cu121`
-* `torchaudio==2.3.1+cu121`
+* `torch==2.8.0`
+* `torchvision==0.23.0`
+* `torchaudio==2.8.0`
 
 As the project matures, a stable `requirements.txt` and local development setup will be formalized.
 
