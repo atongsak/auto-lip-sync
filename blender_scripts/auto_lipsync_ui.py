@@ -34,45 +34,66 @@ VISEME_SETS = {
     }
 }
 
+
 def get_viseme_set_items(self, context):
     return [
         (key, value["label"], value["description"])
         for key, value in VISEME_SETS.items()
     ]
     
+    
 def initialize_visemes(scene):
     settings = scene.auto_lip_sync
     
     settings.viseme_mappings.clear()
     
-    viseme_key = "MICROSOFT_22"
+    viseme_key = settings.viseme_set 
     visemes = VISEME_SETS[viseme_key]["visemes"]
     
     for viseme in visemes:
         item = settings.viseme_mappings.add()
         item.viseme_name = viseme
 
+
 def update_viseme_set(self, context):
     initialize_visemes(context.scene)
 
-def list_pose_assets(self, context):
-    """Returns a list of items in the user's asset library"""
-    # TODO: Only show the assets that are associated with the selected model for lip sync
-    items = [("None", "None", "None")]
-    for action in bpy.data.actions:
-        if action.asset_data:
-            items.append((action.name, action.name, f"{action.name}"))
-    return items
+
+def poll_pose_assets(self, action):
+    return action.asset_data is not None
+
+
+def list_audio_channels(self, context):
+    scene = context.scene
+    items = [] 
+    
+    if scene.sequence_editor:
+        channels = set()
+        
+        for strip in scene.sequence_editor.strips_all:
+            if strip.type == 'SOUND':
+                channels.add(strip.channel)
+        
+        for channel in sorted(channels):
+            items.append(
+                (str(channel),
+                f"Channel {channel}",
+                f"Audio channel {channel}")
+            )
+                
+    return items or [("None", "No audio", "No sound strips found")]
+
 
 class VisemeItem(bpy.types.PropertyGroup):
     """Corresponding viseme name and pose asset dropdown"""
     viseme_name: bpy.props.StringProperty()
-    
-    # Dropdown enum
-    pose_asset: bpy.props.EnumProperty(
+
+    pose_asset: bpy.props.PointerProperty(
         name="Pose Asset",
-        items=list_pose_assets
+        type=bpy.types.Action,
+        poll=poll_pose_assets
     )
+
 
 class AutoLipSyncSettings(bpy.types.PropertyGroup):
     VISEME_SET_ITEMS = [
@@ -80,11 +101,22 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         ("META_15", "15 Visemes", "Meta's 15 viseme set"),
     ]
     
+    target_rig: bpy.props.PointerProperty(
+        name="",
+        type=bpy.types.Object,
+        poll=lambda self, obj: obj.type == 'ARMATURE'
+    )
+    
     viseme_set: bpy.props.EnumProperty(
         name="",
         items=VISEME_SET_ITEMS,
         default="MICROSOFT_22",
         update=update_viseme_set
+    )
+    
+    target_channel: bpy.props.EnumProperty(
+        name="",
+        items=list_audio_channels
     )
     
     viseme_mappings: bpy.props.CollectionProperty(type=VisemeItem)
@@ -105,6 +137,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         description="Jaw amplification"
     )
 
+
 class VisemeMappingSubPanel(bpy.types.Panel):
     """Viseme/mouth pose mapping subpanel"""
     bl_label = "Viseme Mapping"
@@ -114,18 +147,24 @@ class VisemeMappingSubPanel(bpy.types.Panel):
     bl_parent_id = "VIEW3D_PT_lip_sync" # Ties to main panel
     bl_options = {'DEFAULT_CLOSED'} # Enables the triangle
     
+    @classmethod
+    def poll(cls, context):
+        # Only show viseme mapping if target rig is selected/True
+        return context.scene.auto_lip_sync.target_rig
+    
     def draw(self, context):
         layout = self.layout  
-        tool = context.scene.auto_lip_sync
-        
+        settings = context.scene.auto_lip_sync
+    
         header = layout.row()
         header.label(text="Viseme")
         header.label(text="Mouth Pose")
     
-        for item in tool.viseme_mappings:
+        for item in settings.viseme_mappings:
             row = layout.row()
             row.label(text=item.viseme_name)
             row.prop(item, "pose_asset", text="")
+           
        
 class AnimationSettingsSubPanel(bpy.types.Panel):
     """Animation settings subpanel"""
@@ -135,6 +174,11 @@ class AnimationSettingsSubPanel(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_parent_id = "VIEW3D_PT_lip_sync" # Ties to main panel
     bl_options = {'DEFAULT_CLOSED'} # Enables the triangle
+    
+    @classmethod
+    def poll(cls, context):
+        # Only show viseme mapping if target rig is selected/True
+        return context.scene.auto_lip_sync.target_rig
 
     def draw(self, context):
         layout = self.layout
@@ -157,10 +201,17 @@ class GenerateKeyframesSubPanel(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_parent_id = "VIEW3D_PT_lip_sync"
     bl_options = {'HIDE_HEADER'}
+    
+    @classmethod
+    def poll(cls, context):
+        # Only show viseme mapping if target rig is selected/True
+        return context.scene.auto_lip_sync.target_rig
+    
     def draw(self, context):
         layout = self.layout
         # TODO: Implement generate keyframes button
         layout.operator("object.shade_smooth", text="Generate keyframes")
+
 
 class AutoLipSyncPanel(bpy.types.Panel):
     """Main add-on panel"""
@@ -170,15 +221,25 @@ class AutoLipSyncPanel(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     
-    
     def draw(self, context):
         settings = context.scene.auto_lip_sync
         layout = self.layout
-        scene = context.scene
         
-        row = layout.row()
-        row.label(text="Viseme Set")
-        row.prop(settings, "viseme_set")
+        rig_row = layout.row()
+        rig_row.label(text="Target Rig")
+        rig_row.prop(settings, "target_rig")
+        
+        set_row = layout.row()
+        set_row.label(text="Viseme Set")
+        set_row.prop(settings, "viseme_set")
+        
+        channel_row = layout.row()
+        channel_row.label(text="Audio Channel")
+        channel_row.prop(settings, "target_channel")
+        
+        if settings.target_rig == None:
+            alert_row = layout.row()
+            alert_row.label(text="Select a target rig to start", icon='INFO')
 
 
 classes = (

@@ -1,3 +1,4 @@
 **/.DS_Store
 .venv/
 .venv_gpu/
+__pycache__/
