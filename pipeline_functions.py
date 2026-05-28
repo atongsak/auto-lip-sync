@@ -1,3 +1,4 @@
+# Handles phoneme tokens composed of multiple chars
 def normalize_token(token: str) -> list[str]:
     if not token:
         return []
@@ -18,19 +19,32 @@ def normalize_token(token: str) -> list[str]:
 
     return [token]
 
-
-def cleanup_visemes(visemes, viseme_mapping, render_end, mouth_close_delay):
-    if not visemes:
-        return []
-    
-    visemes = sorted(visemes, key=lambda x: x["start"])
-
+# Cleans viseme list and stores into keyframe dict
+def cleanup_visemes(visemes, viseme_mapping, settings_dict):
+    render_start = settings_dict["render_start"]
+    render_end = settings_dict["render_end"]
+    mouth_close_delay = settings_dict["mouth_close_delay"]
+    cleaned_dict = {}
     cleaned = []
     current_frame = 0
 
+    if not visemes:
+        return {}
+
     for v in visemes:
+        start_frame = v["start"] - v["strip_offset"]
+        end_frame = v["end"] - v["strip_offset"]
+
+        # Ignore visemes cut off by left and right trim
+        if start_frame < v["strip_start"] or start_frame >= v["strip_end"]:
+            continue
+
+        # Ignore visemes not within rendered range
+        if start_frame < render_start or start_frame >= render_end:
+            continue
+        
         # If gap between visemes, insert sil
-        if v["start"] > current_frame + mouth_close_delay:
+        if start_frame > current_frame + mouth_close_delay:
             hold_end = current_frame + mouth_close_delay
 
             # extend previous viseme hold
@@ -41,13 +55,19 @@ def cleanup_visemes(visemes, viseme_mapping, render_end, mouth_close_delay):
                 "token": "sil",
                 "viseme": viseme_mapping["sil"],
                 "start": hold_end,
-                "end": v["start"]
+                "end": start_frame
             })
         
         # Append viseme
-        cleaned.append(v)
-        current_frame = max(current_frame, v["end"])
+        cleaned.append({
+            "token": v["token"],
+            "viseme": viseme_mapping[v["token"]],
+            "start": start_frame,
+            "end": end_frame
+        })
 
+        current_frame = max(current_frame, end_frame)
+      
     # Trailing sil
     if current_frame < render_end:
         cleaned.append({
@@ -57,20 +77,24 @@ def cleanup_visemes(visemes, viseme_mapping, render_end, mouth_close_delay):
             "end": render_end
         })
 
-    return cleaned
+    cleaned_dict["keyframes"] = cleaned
 
+    return cleaned_dict
 
-def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, settings_dict):
+# Creates a viseme timing list using phoneme timing data
+def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, strip_end, strip_offset, settings_dict):
     fps = settings_dict["fps"]
     mouth_close_delay = settings_dict["mouth_close_delay"]
-
     results = []
 
     for p in phoneme_timings:
         raw_token = p["char"]
-        start = (p["start"] + strip_start) * fps
-        end = (p["end"] + strip_start) * fps
 
+        # Convert phoneme timing from seconds to frames, take into account strip edits
+        start = (p["start"] * fps) + strip_start
+        end = (p["end"] * fps) + strip_start
+
+        # Handle multi-char phoneme tokens
         tokens = normalize_token(raw_token)
 
         for token in tokens:
@@ -81,7 +105,7 @@ def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, settings_d
 
                 duration = end - start
     
-                # Short pause → blend into previous viseme
+                # Ignore sil if its duration is less than mouth close delay
                 if results and duration < mouth_close_delay:
                     results[-1]["end"] = end 
                     continue
@@ -98,7 +122,10 @@ def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, settings_d
                     "token": "sil",
                     "viseme": viseme,
                     "start": def_start,
-                    "end": end
+                    "end": end,
+                    "strip_start": strip_start,
+                    "strip_end": strip_end,
+                    "strip_offset": strip_offset
                 })
                 continue
 
@@ -122,8 +149,10 @@ def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, settings_d
                 "token": token,
                 "viseme": viseme,
                 "start": start,
-                "end": end
+                "end": end,
+                "strip_start": strip_start,
+                "strip_end": strip_end,
+                "strip_offset": strip_offset
             })
 
     return results
-    # return cleanup_visemes(results, viseme_mapping, render_end, mouth_close_delay)

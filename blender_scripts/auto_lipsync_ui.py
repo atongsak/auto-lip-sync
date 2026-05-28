@@ -234,15 +234,15 @@ class AudioToVisemeOperator(bpy.types.Operator):
             for slot in pose_asset.slots:
                 channelbag = anim_utils.action_get_channelbag_for_slot(pose_asset, slot)
                 for fc in channelbag.fcurves:
-                    self.apply_fcurve(armature, fc, keyframe["start_frame"])
+                    self.apply_fcurve(armature, fc, keyframe["start"])
 
-                    # We need to insert two keyframes to hold the sil 
+                    # We need to insert two keyframes to hold sil visemes that aren't at the end
                     # one at the start frame and another at the end frame
-                    if viseme == "sil":
-                        self.apply_fcurve(armature, fc, keyframe["end_frame"]-1)
+                    if viseme == "sil" and i != len(keyframe_data_dict["keyframes"])-1:
+                        self.apply_fcurve(armature, fc, keyframe["end"]-1)
                         
             # Update progress bar for every keyframe being inserted
-            local = (i + 1) / len(keyframe_data_dict)
+            local = (i + 1) / len(keyframe_data_dict["keyframes"])
             settings.progress = settings.progress + local * 0.2
             
     # Clears existing keyframes within the rendered range for relevant bones
@@ -301,20 +301,17 @@ class AudioToVisemeOperator(bpy.types.Operator):
             try:
                 while True:
                     line = self.queue.get_nowait()
-
                     if line.startswith("PROGRESS"):
                         settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
-
                         for area in context.screen.areas:
                             area.tag_redraw()
             except queue.Empty:
                 pass
-            
+
+        # Subprocess finished 
         if self.process.poll() is not None:
-            # Subprocess finished   
             if settings.clear_existing_keyframes:
                 self.clear_keyframes(context)
-
             self.insert_keyframes(context)
 
             wm = context.window_manager
@@ -445,6 +442,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
                     
         return items or [("None", "No audio", "No sound strips found")]
 
+    # Makes sure stored viseme mappings is initialized 
     def ensure_initialized(self):
         expected = len(VISEME_SETS[self.viseme_set]["visemes"])
 
@@ -511,7 +509,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
     
     clear_existing_keyframes: bpy.props.BoolProperty(
         name="",
-        description="Clear existing keyframes in the Dope Sheet before insertion of lip sync keyframes",
+        description="Clear existing and relevant keyframes in the Dope Sheet before insertion of lip sync keyframes",
         default=False
     )
 
@@ -529,7 +527,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
     
     mouth_close_delay: bpy.props.FloatProperty(
         name="Frames",
-        default=0.0,
+        default=8.0,
         min=0.0,
         max=20, # 20 frames
         description="How many frames silence should last before closing the mouth"
