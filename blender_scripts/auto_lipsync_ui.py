@@ -1,3 +1,4 @@
+# TODO: Legacy info format - need to adjust for toml
 bl_info = {
     "name": "Auto Lip Sync",
     "author": "Annette Tongsak",
@@ -9,6 +10,22 @@ bl_info = {
 }
 
 import bpy
+from bpy_extras import anim_utils
+import subprocess
+import json
+import os
+import re
+import queue
+import threading
+
+# TODO: Have these virtual environments be created for the user via subprocess operator
+VENVS = {
+    "CPU_PYTHON": "C:/Users/SPIRO/Documents/auto-lip-sync/.venv/Scripts/python.exe",
+    "GPU_PYTHON": "C:/Users/SPIRO/Documents/auto-lip-sync/.venv_gpu/Scripts/python.exe"
+}
+
+# Path to external script
+script_path = "C:/Users/SPIRO/Documents/auto-lip-sync/main.py"
 
 VISEME_SETS = {
     "MICROSOFT_22": {
@@ -22,7 +39,6 @@ VISEME_SETS = {
             "k, g", "b, m, p"
         ]
     },
-
     "META_15": {
         "label": "15 Visemes",
         "description": "Meta's 15 viseme set",
@@ -33,59 +49,293 @@ VISEME_SETS = {
         ]
     }
 }
-
-
-def get_viseme_set_items(self, context):
-    return [
-        (key, value["label"], value["description"])
-        for key, value in VISEME_SETS.items()
-    ]
     
-    
-def initialize_visemes(scene):
-    settings = scene.auto_lip_sync
-    
-    settings.viseme_mappings.clear()
-    
-    viseme_key = settings.viseme_set 
-    visemes = VISEME_SETS[viseme_key]["visemes"]
-    
-    for viseme in visemes:
-        item = settings.viseme_mappings.add()
-        item.viseme_name = viseme
 
-
-def update_viseme_set(self, context):
-    initialize_visemes(context.scene)
-
-
-def poll_pose_assets(self, action):
-    return action.asset_data is not None
-
-
-def list_audio_channels(self, context):
+# Returns dict of name, start/end frames, and file path of audio strips on target channel
+def get_target_audio_strips(context):
     scene = context.scene
-    items = [] 
-    
-    if scene.sequence_editor:
-        channels = set()
-        
-        for strip in scene.sequence_editor.strips_all:
-            if strip.type == 'SOUND':
-                channels.add(strip.channel)
-        
-        for channel in sorted(channels):
-            items.append(
-                (str(channel),
-                f"Channel {channel}",
-                f"Audio channel {channel}")
-            )
-                
-    return items or [("None", "No audio", "No sound strips found")]
+    target_channel = int(scene.auto_lip_sync.target_channel)
 
+    all_audio_strips = []
+    target_audio_strips = []
+
+    for strip in scene.sequence_editor.strips_all:
+        if strip.type == 'SOUND' and strip.channel == target_channel:
+            all_audio_strips.append(strip)
+    
+    # Sort by timeline position
+    all_audio_strips.sort(key=lambda s: s.frame_final_start)
+        
+    target_audio_dict = {
+        "start": all_audio_strips[0].frame_final_start,
+        "end": all_audio_strips[-1].frame_final_end
+    }    
+
+    for strip in all_audio_strips:
+        target_audio_strips.append({
+            "name": strip.name,
+            "start": strip.frame_final_start, 
+            "end": strip.frame_final_end,
+            "offset": strip.frame_offset_start,
+            "path": bpy.path.abspath(strip.sound.filepath)
+        })   
+            
+    target_audio_dict["strips"] = target_audio_strips
+        
+    return target_audio_dict
+
+
+# Returns dict of mapped visemes
+def get_mapped_visemes(context):
+    settings = context.scene.auto_lip_sync
+    viseme_mappings = settings.viseme_mappings
+    visemes = VISEME_SETS[settings.viseme_set]["visemes"]
+
+    mapped_visemes_dict = {}
+
+    for index, viseme in enumerate(viseme_mappings):
+        mapped_visemes_dict[visemes[index]] = viseme.pose_asset.name
+        
+    return mapped_visemes_dict
+    
+    
+class AudioToVisemeOperator(bpy.types.Operator): 
+    bl_idname = "wm.run_subprocess"
+    bl_label = "Function that runs the audio-to-viseme process"     
+            
+    # Writes settings.json, starts subprocess, starts timer/modal loop
+    def execute(self, context):
+        settings = context.scene.auto_lip_sync
+        settings.is_generating = True
+        settings.progress = 0.0
+        
+        target_audio_dict = get_target_audio_strips(context)
+        mapped_visemes_dict = get_mapped_visemes(context)
+        
+        settings_dict = {
+            "fps": context.scene.render.fps,
+            "render_start": context.scene.frame_start,
+            "render_end": context.scene.frame_end,
+            "viseme_set": settings.viseme_set,
+            "model_size": settings.model_size,
+            "mouth_close_delay": settings.mouth_close_delay,
+            "jaw_amp": settings.jaw_amp,
+            "audio": target_audio_dict,
+            "visemes": mapped_visemes_dict
+        }
+        
+        file_path = os.path.join(bpy.app.tempdir, "settings.json")
+        with open(file_path, 'w', encoding='utf-8') as f:
+            text = json.dumps(settings_dict, indent=4)
+            f.write(text)
+
+        venv_path = VENVS[settings.venv]
+        command = [venv_path, "-u", script_path, "--", file_path] 
+
+        self.process = subprocess.Popen(
+                        command,
+                        stdout = subprocess.PIPE, # Save command's output into var instead of printing
+                        stderr = subprocess.STDOUT,
+                        text = True
+                    )
+        
+        self.queue = queue.Queue()
+                        
+        def enqueue_output(pipe, q):
+            for line in iter(pipe.readline, ''):
+                q.put(line)
+            pipe.close()
+            
+        # Create thread to read progress logs from main.py
+        self.thread = threading.Thread(
+            target=enqueue_output,
+            args=(self.process.stdout, self.queue),
+            daemon=True
+        )
+        self.thread.start()
+                    
+        wm = context.window_manager
+        self.timer = wm.event_timer_add(0.1, window=context.window)
+        wm.modal_handler_add(self)
+            
+        return {'RUNNING_MODAL'}
+        
+    # Applies fcurve to bone property at specified keyframe
+    def apply_fcurve(self, obj, fc, frame):
+        data_path = fc.data_path 
+        idx = fc.array_index # Specifies which component is being animated
+        value = fc.evaluate(frame) # Calculates the interpolated val of an anim curve at frame
+
+        # CASE 1: custom property on bone
+        # For formatted bones like pose.bones["MSTR-Mouth"]["Tooth Visibility"]
+        custom_match = re.match(r'(pose\.bones\[".+?"\])\["(.+?)"\]', data_path)
+
+        if custom_match:
+            # Save bone expression and prop name from string matched by re
+            bone_expr = custom_match.group(1) # First parenthesized subgroup, ex: pose.bones["MSTR-Mouth"]
+            prop_name = custom_match.group(2) # Second parenthesized subgroup, ex: Tooth Visibility
+
+            # Get bone and its property
+            bone = obj.path_resolve(bone_expr)
+            val = bone[prop_name]
+            
+            # Skip properties that are non-numeric
+            if not isinstance(val, float):
+                return
+            
+            # Apply the fcurve to the bone property and insert keyframe
+            bone[prop_name] = value
+            bone.keyframe_insert(data_path=f'["{prop_name}"]', frame=frame)
+            return
+
+        # CASE 2: normal property
+        # For formatted bones like pose.bones["DEF-Teeth_upp1.R"].location 
+        owner_path, prop_name = data_path.rsplit(".", 1)
+        
+        # Get bone and its property
+        owner = obj.path_resolve(owner_path)
+        prop = getattr(owner, prop_name)
+
+        # If property is a vector or quaternion and not a string
+        if hasattr(prop, "__len__") and not isinstance(prop, str):
+            # Apply the interpolated val to the property at inserted keyframe
+            prop[idx] = value
+
+            owner.keyframe_insert(
+                data_path=prop_name,
+                index=idx,
+                frame=frame
+            )
+        else:
+            # Set bone's prop name to interpolated val and insert keyframe
+            owner[prop_name] = value
+
+            owner.keyframe_insert(
+                data_path=prop_name,
+                frame=frame
+            )
+    
+    # Inserts keyframes based on keyframe_data.json created by audio-to-viseme pipeline
+    def insert_keyframes(self, context):
+        settings = context.scene.auto_lip_sync
+        armature = settings.target_rig
+        keyframe_data_path = os.path.join(bpy.app.tempdir, "keyframe_data.json")
+        with open(keyframe_data_path, 'r') as f:
+            keyframe_data_dict = json.load(f)
+
+        viseme_lookup = {}
+        for item in settings.viseme_mappings:
+            viseme_lookup[item.viseme_name] = item.pose_asset
+
+        for i, keyframe in enumerate(keyframe_data_dict["keyframes"]):
+            viseme = keyframe["viseme"]
+            pose_asset = viseme_lookup[viseme]
+            
+            for slot in pose_asset.slots:
+                channelbag = anim_utils.action_get_channelbag_for_slot(pose_asset, slot)
+                for fc in channelbag.fcurves:
+                    self.apply_fcurve(armature, fc, keyframe["start_frame"])
+
+                    # We need to insert two keyframes to hold the sil 
+                    # one at the start frame and another at the end frame
+                    if viseme == "sil":
+                        self.apply_fcurve(armature, fc, keyframe["end_frame"]-1)
+                        
+            # Update progress bar for every keyframe being inserted
+            local = (i + 1) / len(keyframe_data_dict)
+            settings.progress = settings.progress + local * 0.2
+            
+    # Clears existing keyframes within the rendered range for relevant bones
+    # Used before insertion and only affects bone properties about to be keyframed
+    def clear_keyframes(self, context):
+        settings = context.scene.auto_lip_sync
+        start = context.scene.frame_start
+        end = context.scene.frame_end
+        armature = settings.target_rig
+        target_action = armature.animation_data.action
+
+        affected_channels = set()
+
+        # For each pose asset in the viseme mapping table
+        for item in settings.viseme_mappings:
+            pose_asset = item.pose_asset 
+            if not pose_asset:
+                continue
+
+            # Collect channels affected by pose asset
+            for slot in pose_asset.slots:
+                channelbag = anim_utils.action_get_channelbag_for_slot(pose_asset, slot)
+                for fc in channelbag.fcurves:
+                    if fc.data_path.startswith("pose.bones["):
+                        affected_channels.add(
+                            (fc.data_path, fc.array_index)
+                        )
+    
+        # Remove keys in render range
+        for slot in target_action.slots:
+            channelbag = anim_utils.action_get_channelbag_for_slot(target_action, slot)
+            for fc in channelbag.fcurves:
+                channel_id = (fc.data_path, fc.array_index)
+
+                if channel_id not in affected_channels:
+                    continue
+
+                # Remove keys in frame range
+                for kp in reversed(fc.keyframe_points):
+                    frame = round(kp.co.x) # Frame number of specific keyframe
+
+                    if start <= round(frame) <= end:
+                        fc.keyframe_points.remove(kp)
+
+                fc.update()
+
+        settings.progress = 0.75
+    
+    # Periodically checks subprocess status and inserts keyframes when done
+    def modal(self, context, event):    
+        settings = context.scene.auto_lip_sync
+        SUBPROCESS_WEIGHT = 0.7
+        
+        if event.type == 'TIMER':
+            # If subprocess is still running    
+            try:
+                while True:
+                    line = self.queue.get_nowait()
+
+                    if line.startswith("PROGRESS"):
+                        settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
+
+                        for area in context.screen.areas:
+                            area.tag_redraw()
+            except queue.Empty:
+                pass
+            
+        if self.process.poll() is not None:
+            # Subprocess finished   
+            if settings.clear_existing_keyframes:
+                self.clear_keyframes(context)
+
+            self.insert_keyframes(context)
+
+            wm = context.window_manager
+            wm.event_timer_remove(self.timer)
+
+            settings.progress = 1.0
+            for area in context.screen.areas:
+                area.tag_redraw()
+            
+            settings.is_generating = False
+
+            return {'FINISHED'}
+        
+        return {'RUNNING_MODAL'}
+    
 
 class VisemeItem(bpy.types.PropertyGroup):
-    """Corresponding viseme name and pose asset dropdown"""
+    # Returns pose assets to propagate dropdown
+    def poll_pose_assets(self, action):
+        return action.asset_data is not None
+
     viseme_name: bpy.props.StringProperty()
 
     pose_asset: bpy.props.PointerProperty(
@@ -95,10 +345,140 @@ class VisemeItem(bpy.types.PropertyGroup):
     )
 
 
+class VisemeSetMappingGroup(bpy.types.PropertyGroup):
+    viseme_set: bpy.props.StringProperty()
+
+    viseme_mappings: bpy.props.CollectionProperty(type=VisemeItem)
+
+
 class AutoLipSyncSettings(bpy.types.PropertyGroup):
+    # Gets specified set's VisemeSetMapping Group
+    def get_mapping_group(self, viseme_set):
+        for group in self.viseme_set_mappings:
+            if group.viseme_set == viseme_set:
+                return group
+
+    # Initializes VisemeItem with viseme_name in a collection
+    def init_set_visemes(self, collection, viseme_set):
+        for viseme in VISEME_SETS[viseme_set]["visemes"]:
+            item = collection.add()
+            item.viseme_name = viseme
+
+    # Initializes VisemeSetMappingGroup
+    def init_viseme_set_mappings(self):
+        if not self.get_mapping_group("MICROSOFT_22"):
+            microsoft_22 = self.viseme_set_mappings.add()
+            microsoft_22.viseme_set = "MICROSOFT_22"
+            self.init_set_visemes(microsoft_22.viseme_mappings, microsoft_22.viseme_set)
+        
+        if not self.get_mapping_group("META_15"):
+            meta_15 = self.viseme_set_mappings.add()
+            meta_15.viseme_set = "META_15"
+            self.init_set_visemes(meta_15.viseme_mappings, meta_15.viseme_set)
+
+    # Rebuilds self.viseme_mappings
+    def rebuild_viseme_mappings(self):
+        print("CURRENT SET:", self.viseme_set)
+
+        viseme_set_group = self.get_mapping_group(self.viseme_set)
+
+        print("GROUP:", viseme_set_group)
+
+        self.viseme_mappings.clear()
+
+        visemes = viseme_set_group.viseme_mappings
+
+        for viseme in visemes:
+            item = self.viseme_mappings.add()
+            item.viseme_name = viseme.viseme_name
+            item.pose_asset = viseme.pose_asset
+
+    # Store previous viseme set's mappings into cache
+    def sync_set_visemes(self, source, target):
+        # Save self.viseme_mappings to collection.viseme_mappings
+        for src, dst in zip(source, target):
+            dst.pose_asset = src.pose_asset
+          
+    # Saves viseme set's mappings to VisemeSetMappingGroup
+    def cache_viseme_mappings(self):
+        # Get the group corresponding to the current UI state
+        viseme_set_group = self.get_mapping_group(self.prev_viseme_set)
+        self.sync_set_visemes(self.viseme_mappings, viseme_set_group.viseme_mappings)
+
+    # Updates stored viseme set
+    def update_viseme_set(self, context):
+        viseme_set_group = self.get_mapping_group(self.prev_viseme_set)
+        
+        # Save existing mapping to cache
+        self.cache_viseme_mappings()
+        
+        # Clear active UI mappings
+        self.viseme_mappings.clear()
+        
+        # If group empty, create defaults
+        if not viseme_set_group:
+            self.init_viseme_set_mappings()
+        else: 
+            self.rebuild_viseme_mappings()
+
+        # Update prev_viseme_set
+        self.prev_viseme_set = self.viseme_set
+
+    # Returns list of audio channels to propagate dropdown
+    def list_audio_channels(self, context):
+        scene = context.scene
+        items = [] 
+        
+        if scene.sequence_editor:
+            channels = set()
+            
+            for strip in scene.sequence_editor.strips_all:
+                if strip.type == 'SOUND':
+                    channels.add(strip.channel)
+            
+            for channel in sorted(channels):
+                items.append(
+                    (str(channel),
+                    f"Channel {channel}",
+                    f"Audio channel {channel}")
+                )
+                    
+        return items or [("None", "No audio", "No sound strips found")]
+
+    def ensure_initialized(self):
+        expected = len(VISEME_SETS[self.viseme_set]["visemes"])
+
+        valid = (
+            len(self.viseme_mappings) == expected 
+            and all(v.viseme_name for v in self.viseme_mappings)
+        )
+
+        if not valid:
+            self.init_viseme_set_mappings()
+            self.rebuild_viseme_mappings()
+
+    @property
+    def is_mapping_complete(self):
+        return all(m.pose_asset is not None for m in self.viseme_mappings)
+        
     VISEME_SET_ITEMS = [
         ("MICROSOFT_22", "22 Visemes", "Microsoft's 22 viseme set"),
         ("META_15", "15 Visemes", "Meta's 15 viseme set"),
+    ]
+    
+    MODEL_SIZES = [
+        ("tiny", "tiny.en", "~10x relative speed"),
+        ("base", "base.en", "~7x relative speed"),
+        ("small", "small.en", "~4x relative speed"),
+        ("medium", "medium.en", "~2x relative speed"),
+        ("large", "large", "1x relative speed"),
+        ("large-v2", "large-v2", "1x relative speed, improved accuracy over large"),
+        ("turbo", "turbo", "~8x relative speed"),
+    ]
+
+    VENV_OPTIONS = [
+        ("CPU_PYTHON", "CPU", "Run ASR model on CPU"),
+        ("GPU_PYTHON", "GPU", "Run ASR model on GPU")
     ]
     
     target_rig: bpy.props.PointerProperty(
@@ -113,20 +493,46 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         default="MICROSOFT_22",
         update=update_viseme_set
     )
+
+    prev_viseme_set: bpy.props.StringProperty(
+        default="MICROSOFT_22"
+    )
     
     target_channel: bpy.props.EnumProperty(
         name="",
         items=list_audio_channels
     )
     
+    # Active UI working set
     viseme_mappings: bpy.props.CollectionProperty(type=VisemeItem)
+
+    # Persistent storage for each viseme set
+    viseme_set_mappings: bpy.props.CollectionProperty(type=VisemeSetMappingGroup)
+    
+    clear_existing_keyframes: bpy.props.BoolProperty(
+        name="",
+        description="Clear existing keyframes in the Dope Sheet before insertion of lip sync keyframes",
+        default=False
+    )
+
+    model_size: bpy.props.EnumProperty(
+        name="",
+        items=MODEL_SIZES,
+        default="tiny"
+    )
+
+    venv: bpy.props.EnumProperty(
+        name="",
+        items=VENV_OPTIONS,
+        default="CPU_PYTHON"
+    )
     
     mouth_close_delay: bpy.props.FloatProperty(
-        name="Milliseconds",
+        name="Frames",
         default=0.0,
         min=0.0,
-        max=5000.0, # 5 secs
-        description="How long silence should last before closing the mouth"
+        max=20, # 20 frames
+        description="How many frames silence should last before closing the mouth"
     )
     
     jaw_amp: bpy.props.FloatProperty(
@@ -137,19 +543,29 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         description="Jaw amplification"
     )
 
+    progress: bpy.props.FloatProperty(
+        name="Progress",
+        subtype='FACTOR',
+        default=0.0,
+        min=0.0,
+        max=1.0
+    )
+    
+    is_generating: bpy.props.BoolProperty(
+        default=False
+    )
+
 
 class VisemeMappingSubPanel(bpy.types.Panel):
-    """Viseme/mouth pose mapping subpanel"""
     bl_label = "Viseme Mapping"
     bl_idname = "VIEW3D_PT_viseme_subpanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_parent_id = "VIEW3D_PT_lip_sync" # Ties to main panel
-    bl_options = {'DEFAULT_CLOSED'} # Enables the triangle
+    bl_parent_id = "VIEW3D_PT_lip_sync" 
+    bl_options = {'DEFAULT_CLOSED'} 
     
     @classmethod
     def poll(cls, context):
-        # Only show viseme mapping if target rig is selected/True
         return context.scene.auto_lip_sync.target_rig
     
     def draw(self, context):
@@ -167,32 +583,44 @@ class VisemeMappingSubPanel(bpy.types.Panel):
            
        
 class AnimationSettingsSubPanel(bpy.types.Panel):
-    """Animation settings subpanel"""
     bl_label = "Animation Settings"
     bl_idname = "VIEW3D_PT_animsettings_subpanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_parent_id = "VIEW3D_PT_lip_sync" # Ties to main panel
-    bl_options = {'DEFAULT_CLOSED'} # Enables the triangle
+    bl_parent_id = "VIEW3D_PT_lip_sync" 
+    bl_options = {'DEFAULT_CLOSED'} 
     
     @classmethod
     def poll(cls, context):
-        # Only show viseme mapping if target rig is selected/True
-        return context.scene.auto_lip_sync.target_rig
-
+        settings = context.scene.auto_lip_sync
+        settings.ensure_initialized()
+        return settings.target_rig 
+    
     def draw(self, context):
+        settings = context.scene.auto_lip_sync
         layout = self.layout
         
+        model_picker = layout.row()
+        model_picker.label(text="ASR Model Size")
+        model_picker.prop(settings, "model_size")
+
+        venv_picker = layout.row()
+        venv_picker.label(text="Compute")
+        venv_picker.prop(settings, "venv")
+        
+        clear_existing_toggle = layout.row()
+        clear_existing_toggle.label(text="Clear existing keyframes")
+        clear_existing_toggle.prop(settings, "clear_existing_keyframes")
+
         close_header = layout.row()
         close_header.label(text="Close Mouth After:")
-        layout.prop(context.scene.auto_lip_sync, "mouth_close_delay", slider=True)
+        layout.prop(settings, "mouth_close_delay", slider=True)
         
         # TODO: Figure out how I'm going to amplify the jaw based on volume
-        jaw_header = layout.row()
-        jaw_header.label(text="Speech Intensity:")
-        layout.prop(context.scene.auto_lip_sync, "jaw_amp", slider=True)
-
-
+        # jaw_header = layout.row()
+        # jaw_header.label(text="Speech Intensity:")
+        # layout.prop(settings, "jaw_amp", slider=True)
+        
 
 class GenerateKeyframesSubPanel(bpy.types.Panel):
     bl_label = "Generate Keyframes"
@@ -204,17 +632,24 @@ class GenerateKeyframesSubPanel(bpy.types.Panel):
     
     @classmethod
     def poll(cls, context):
-        # Only show viseme mapping if target rig is selected/True
         return context.scene.auto_lip_sync.target_rig
-    
+            
     def draw(self, context):
         layout = self.layout
-        # TODO: Implement generate keyframes button
-        layout.operator("object.shade_smooth", text="Generate keyframes")
+        settings = context.scene.auto_lip_sync
+        
+        if settings.is_mapping_complete:
+            if settings.is_generating:
+                layout.prop(settings, "progress", text="Running Auto Lip Sync...", slider=False)
 
+            layout.operator("wm.run_subprocess", text="Generate keyframes")
+            
+        else:
+            alert_row = layout.row()
+            alert_row.label(text="Complete viseme mapping to generate keyframes", icon='INFO')
 
+   
 class AutoLipSyncPanel(bpy.types.Panel):
-    """Main add-on panel"""
     bl_idname = "VIEW3D_PT_lip_sync"
     bl_category = "Auto Lip Sync"
     bl_label = "Auto Lip Sync"
@@ -236,7 +671,7 @@ class AutoLipSyncPanel(bpy.types.Panel):
         channel_row = layout.row()
         channel_row.label(text="Audio Channel")
         channel_row.prop(settings, "target_channel")
-        
+
         if settings.target_rig == None:
             alert_row = layout.row()
             alert_row.label(text="Select a target rig to start", icon='INFO')
@@ -244,12 +679,15 @@ class AutoLipSyncPanel(bpy.types.Panel):
 
 classes = (
     VisemeItem,
+    VisemeSetMappingGroup,
     AutoLipSyncSettings,
+    AudioToVisemeOperator,
     AutoLipSyncPanel,
     VisemeMappingSubPanel,
     AnimationSettingsSubPanel,
     GenerateKeyframesSubPanel
 )
+
 
 def register():
     for cls in classes: bpy.utils.register_class(cls)
@@ -257,12 +695,11 @@ def register():
     bpy.types.Scene.auto_lip_sync = bpy.props.PointerProperty(
         type=AutoLipSyncSettings
     )
-    
-    # TODO: May be risky if multiple scenes exist
-    initialize_visemes(bpy.context.scene)
+        
 
 def unregister():
     del bpy.types.Scene.auto_lip_sync
+
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 

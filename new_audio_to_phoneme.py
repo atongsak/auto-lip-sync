@@ -23,7 +23,7 @@ print("torchaudio:", torchaudio.__version__)
 
 WORK_DIR = "C:/Users/SPIRO/documents/auto-lip-sync/test_audios"
 
-audio_name = "i-live-alone"
+audio_name = "by-the-way-you-know-when"
 
 audio_file = f"{WORK_DIR}/{audio_name}.wav"
 text = ""
@@ -232,6 +232,9 @@ audio_duration = get_duration_pydub(audio_file)
 print(audio_duration)
 
 visemes = phonemes_to_visemes(phoneme_timings, ipa_to_viseme, audio_duration)
+
+print("HOOOHA")
+print(visemes)
 
 # # new
 # import os
