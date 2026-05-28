@@ -375,11 +375,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
 
     # Rebuilds self.viseme_mappings
     def rebuild_viseme_mappings(self):
-        print("CURRENT SET:", self.viseme_set)
-
         viseme_set_group = self.get_mapping_group(self.viseme_set)
-
-        print("GROUP:", viseme_set_group)
 
         self.viseme_mappings.clear()
 
@@ -455,9 +451,70 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
             self.init_viseme_set_mappings()
             self.rebuild_viseme_mappings()
 
-    @property
-    def is_mapping_complete(self):
-        return all(m.pose_asset is not None for m in self.viseme_mappings)
+    # Valid/invalid state of viseme mappings
+    def viseme_mappings_valid(self):
+        validation = self.validate_viseme_mappings()
+    
+        return not any(validation.values())
+    
+    # Checks for problems among viseme mappings
+    def validate_viseme_mappings(self):
+        results = {
+            "missing_action": [],
+            "no_pose_animation": [],
+            "missing_bones": []
+        }
+
+        rig = self.target_rig
+
+        if rig is None or rig.type != 'ARMATURE':
+            return results
+
+        for viseme in self.viseme_mappings:
+            action = viseme.pose_asset
+            valid, reason = self.action_matches_rig(action, rig)
+
+            if valid:
+                continue
+
+            results[reason].append(viseme.viseme_name)
+
+        return results
+    
+    # Checks if action bones exist in rig bones
+    def action_matches_rig(self, action, rig):
+        rig_bones = set(rig.pose.bones.keys())
+        action_bones = set()
+
+        if action is None:
+            return False, "missing_action"
+
+        if not action.slots:
+            return False, "no_pose_animation"
+
+        for slot in action.slots:
+            channelbag = anim_utils.action_get_channelbag_for_slot(action, slot)
+
+            if channelbag is None:
+                continue
+
+            for fc in channelbag.fcurves:
+
+                path = fc.data_path
+
+                if path.startswith('pose.bones["'):
+                    bone_name = path.split('"')[1]
+                    action_bones.add(bone_name)
+
+        if not action_bones:
+            return False, "no_pose_animation"
+
+        missing = action_bones - rig_bones
+
+        if missing:
+            return False, "missing_bones"
+
+        return True, None
         
     VISEME_SET_ITEMS = [
         ("MICROSOFT_22", "22 Visemes", "Microsoft's 22 viseme set"),
@@ -569,6 +626,38 @@ class VisemeMappingSubPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout  
         settings = context.scene.auto_lip_sync
+        
+        validation = settings.validate_viseme_mappings()
+        
+        if validation["missing_action"]:
+            box = layout.box()
+            box.label(
+                text=f"{len(validation['missing_action'])} visemes have no pose asset assigned",
+                icon='ERROR'
+            )
+            box.label(
+                text=", ".join(validation["missing_action"])
+            )
+
+        if validation["no_pose_animation"]:
+            box = layout.box()
+            box.label(
+                text=f"{len(validation['no_pose_animation'])} visemes contain no pose bone animation",
+                icon='ERROR'
+            )
+            box.label(
+                text=", ".join(validation["no_pose_animation"])
+            )
+
+        if validation["missing_bones"]:
+            box = layout.box()
+            box.label(
+                text=f"{len(validation['missing_bones'])} viseme mappings don't match the target rig",
+                icon='ERROR'
+            )
+            box.label(
+                text=", ".join(validation["missing_bones"])
+            )
     
         header = layout.row()
         header.label(text="Viseme")
@@ -578,8 +667,8 @@ class VisemeMappingSubPanel(bpy.types.Panel):
             row = layout.row()
             row.label(text=item.viseme_name)
             row.prop(item, "pose_asset", text="")
-           
-       
+            
+        
 class AnimationSettingsSubPanel(bpy.types.Panel):
     bl_label = "Animation Settings"
     bl_idname = "VIEW3D_PT_animsettings_subpanel"
@@ -592,7 +681,7 @@ class AnimationSettingsSubPanel(bpy.types.Panel):
     def poll(cls, context):
         settings = context.scene.auto_lip_sync
         settings.ensure_initialized()
-        return settings.target_rig 
+        return settings.target_rig
     
     def draw(self, context):
         settings = context.scene.auto_lip_sync
@@ -630,13 +719,13 @@ class GenerateKeyframesSubPanel(bpy.types.Panel):
     
     @classmethod
     def poll(cls, context):
-        return context.scene.auto_lip_sync.target_rig
+        return context.scene.auto_lip_sync.target_rig 
             
     def draw(self, context):
         layout = self.layout
         settings = context.scene.auto_lip_sync
         
-        if settings.is_mapping_complete:
+        if settings.viseme_mappings_valid():
             if settings.is_generating:
                 layout.prop(settings, "progress", text="Running Auto Lip Sync...", slider=False)
 
@@ -644,7 +733,7 @@ class GenerateKeyframesSubPanel(bpy.types.Panel):
             
         else:
             alert_row = layout.row()
-            alert_row.label(text="Complete viseme mapping to generate keyframes", icon='INFO')
+            alert_row.label(text="Resolve viseme mapping errors to generate keyframes", icon='INFO')
 
    
 class AutoLipSyncPanel(bpy.types.Panel):
@@ -674,7 +763,7 @@ class AutoLipSyncPanel(bpy.types.Panel):
             alert_row = layout.row()
             alert_row.label(text="Select a target rig to start", icon='INFO')
 
-
+        
 classes = (
     VisemeItem,
     VisemeSetMappingGroup,
