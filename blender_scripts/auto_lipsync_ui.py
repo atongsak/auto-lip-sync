@@ -17,6 +17,7 @@ import os
 import re
 import queue
 import threading
+from bpy.app.handlers import persistent
 
 # TODO: Have these virtual environments be created for the user via subprocess operator
 VENVS = {
@@ -50,6 +51,20 @@ VISEME_SETS = {
     }
 }
     
+
+@persistent
+def initialize_viseme_data(dummy):
+    for scene in bpy.data.scenes:
+        settings = scene.auto_lip_sync
+
+        if not settings.viseme_set_mappings:
+            settings.init_viseme_set_mappings()
+        
+        if not settings.viseme_mappings:
+            settings.rebuild_viseme_mappings()
+
+bpy.app.handlers.load_post.append(initialize_viseme_data)
+
 
 # Returns dict of name, start/end frames, and file path of audio strips on target channel
 def get_target_audio_strips(context):
@@ -124,6 +139,8 @@ class AudioToVisemeOperator(bpy.types.Operator):
             "visemes": mapped_visemes_dict
         }
         
+        print(bpy.app.tempdir)
+
         file_path = os.path.join(bpy.app.tempdir, "settings.json")
         with open(file_path, 'w', encoding='utf-8') as f:
             text = json.dumps(settings_dict, indent=4)
@@ -439,17 +456,17 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         return items or [("None", "No audio", "No sound strips found")]
 
     # Makes sure stored viseme mappings is initialized 
-    def ensure_initialized(self):
-        expected = len(VISEME_SETS[self.viseme_set]["visemes"])
+    # def ensure_initialized(self):
+    #     expected = len(VISEME_SETS[self.viseme_set]["visemes"])
 
-        valid = (
-            len(self.viseme_mappings) == expected 
-            and all(v.viseme_name for v in self.viseme_mappings)
-        )
+    #     valid = (
+    #         len(self.viseme_mappings) == expected 
+    #         and all(v.viseme_name for v in self.viseme_mappings)
+    #     )
 
-        if not valid:
-            self.init_viseme_set_mappings()
-            self.rebuild_viseme_mappings()
+    #     if not valid:
+    #         self.init_viseme_set_mappings()
+    #         self.rebuild_viseme_mappings()
 
     # Valid/invalid state of viseme mappings
     def viseme_mappings_valid(self):
@@ -680,7 +697,6 @@ class AnimationSettingsSubPanel(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         settings = context.scene.auto_lip_sync
-        settings.ensure_initialized()
         return settings.target_rig
     
     def draw(self, context):
@@ -782,6 +798,8 @@ def register():
     bpy.types.Scene.auto_lip_sync = bpy.props.PointerProperty(
         type=AutoLipSyncSettings
     )
+
+    initialize_viseme_data(None)
         
 
 def unregister():
