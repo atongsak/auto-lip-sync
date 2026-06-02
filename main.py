@@ -7,23 +7,26 @@ import pipeline_functions
 from viseme_sets import SET_MAPPING_DICT
 import json
 import os
-
-# REMOVE later when no longer printing stuff
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+import argparse
+from pathlib import Path
+import platform
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--file", required=True)
+    parser.add_argument("--compute", default="CPU_COMPUTE")
+
+    return parser.parse_known_args(sys.argv[sys.argv.index("--") + 1:])[0]
 
 def main():
     settings_dict = {}
-  
-    # Get file path for settings.json
-    if "--" in sys.argv:
-        file_path = sys.argv[-1]
-        print(file_path)
-    
-    # DELETE LATER
-    # file_path = "C:\\Users\\SPIRO\\AppData\\Local\\Temp\\blender_a20852\\settings.json"
+    args = parse_args()
 
+    file_path = args.file
+    compute_mode = args.compute
+  
     # Load settings as dict
     with open(file_path, 'r') as f:
         settings_dict = json.load(f)
@@ -34,11 +37,13 @@ def main():
     audio_path = settings_dict["audio_path"]
     parent_dir = os.path.dirname(file_path)
 
-    use_cuda_if_avail = True
-    if use_cuda_if_avail and torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"
+    # use_cuda_if_avail = True
+    # if use_cuda_if_avail and torch.cuda.is_available():
+    #     device = "cuda"
+    # else:
+    #     device = "cpu"
+
+    device = "cuda" if (compute_mode == "GPU_COMPUTE" and torch.cuda.is_available()) else "cpu"
 
     if not hasattr(np, "NaN"):
         np.NaN = np.nan
@@ -53,7 +58,6 @@ def main():
     audio = whisperx.load_audio(audio_path)
     result = model.transcribe(audio, batch_size=batch_size)
     transcript = result["segments"]
-    print(transcript) # before alignment
 
     # Use Phonemize to get the transcript in terms of phonemes
     phone_transcript = [{
@@ -103,7 +107,16 @@ def main():
 
 
 if __name__ == "__main__":
+    addon_dir = Path(__file__).parent
+    os_name = platform.system()
+
+    if os_name == "Windows":
+        print("Using Windows")
+        dll_path = f"{addon_dir}/bin/windows/libespeak-ng.dll"
+        EspeakWrapper.set_library(dll_path)
+
+
     # Testing this fix for Windows
-    EspeakWrapper.set_library(r"C:\Program Files\eSpeak NG\libespeak-ng.dll")
+    # EspeakWrapper.set_library(r"C:\Program Files\eSpeak NG\libespeak-ng.dll")
 
     main()

@@ -18,13 +18,13 @@ import os
 import re
 import queue
 import threading
+import importlib.util
+import sys
+from pathlib import Path
+import importlib
 
-
-# TODO: Have these virtual environments be created for the user via subprocess operator
-VENVS = {
-    "CPU_PYTHON": "C:/Users/SPIRO/Documents/auto-lip-sync/.venv/Scripts/python.exe",
-    "GPU_PYTHON": "C:/Users/SPIRO/Documents/auto-lip-sync/.venv_gpu/Scripts/python.exe"
-}
+INSTALL_PROCESS = None
+INSTALL_SCENE = None
 
 # Path to external script
 script_path = "C:/Users/SPIRO/Documents/auto-lip-sync/main.py"
@@ -157,8 +157,10 @@ class AudioToVisemeOperator(bpy.types.Operator):
             text = json.dumps(settings_dict, indent=4)
             f.write(text)
 
-        venv_path = VENVS[settings.venv]
-        command = [venv_path, "-u", script_path, "--", file_path] 
+        # venv_path = VENVS[settings.venv]
+        # command = [venv_path, "-u", script_path, "--", file_path] 
+        python_exe = sys.executable
+        command = [python_exe, "-u", script_path, "--", "--file", file_path, "--compute", settings.compute]
 
         self.process = subprocess.Popen(
                         command,
@@ -248,6 +250,11 @@ class AudioToVisemeOperator(bpy.types.Operator):
         settings = context.scene.auto_lip_sync
         armature = settings.target_rig
         keyframe_data_path = os.path.join(bpy.app.tempdir, "keyframe_data.json")
+
+        if not os.path.exists(keyframe_data_path):
+            self.report({'ERROR'}, "Keyframe file not generated (subprocess failed)")
+            return {'CANCELLED'}
+
         with open(keyframe_data_path, 'r') as f:
             keyframe_data_dict = json.load(f)
 
@@ -572,9 +579,9 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         ("turbo", "turbo", "~8x relative speed"),
     ]
 
-    VENV_OPTIONS = [
-        ("CPU_PYTHON", "CPU", "Run ASR model on CPU"),
-        ("GPU_PYTHON", "GPU", "Run ASR model on GPU")
+    COMPUTE_OPTIONS = [
+        ("CPU_COMPUTE", "CPU", "Run ASR model on CPU"),
+        ("GPU_COMPUTE", "GPU", "Run ASR model on GPU")
     ]
     
     target_rig: bpy.props.PointerProperty(
@@ -616,13 +623,13 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         items=MODEL_SIZES,
         default="tiny"
     )
-
-    venv: bpy.props.EnumProperty(
-        name="",
-        items=VENV_OPTIONS,
-        default="CPU_PYTHON"
-    )
     
+    compute: bpy.props.EnumProperty(
+        name="",
+        items=COMPUTE_OPTIONS,
+        default="CPU_COMPUTE"
+    )
+
     mouth_close_delay: bpy.props.FloatProperty(
         name="Frames",
         default=8.0,
@@ -631,14 +638,6 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         description="How many frames silence should last before closing the mouth"
     )
     
-    # jaw_amp: bpy.props.FloatProperty(
-    #     name="Amplitude",
-    #     default=0.0,
-    #     min=0.0,
-    #     max=10.0, 
-    #     description="Jaw amplification"
-    # )
-
     progress: bpy.props.FloatProperty(
         name="Progress",
         subtype='FACTOR',
@@ -650,6 +649,10 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
     is_generating: bpy.props.BoolProperty(
         default=False
     )
+
+
+
+
 
 
 class VisemeMappingSubPanel(bpy.types.Panel):
@@ -733,7 +736,7 @@ class AnimationSettingsSubPanel(bpy.types.Panel):
 
         venv_picker = layout.row()
         venv_picker.label(text="Compute")
-        venv_picker.prop(settings, "venv")
+        venv_picker.prop(settings, "compute")
         
         clear_existing_toggle = layout.row()
         clear_existing_toggle.label(text="Clear existing keyframes")
@@ -742,11 +745,6 @@ class AnimationSettingsSubPanel(bpy.types.Panel):
         close_header = layout.row()
         close_header.label(text="Close Mouth After:")
         layout.prop(settings, "mouth_close_delay", slider=True)
-        
-        # TODO: Figure out how I'm going to amplify the jaw based on volume
-        # jaw_header = layout.row()
-        # jaw_header.label(text="Speech Intensity:")
-        # layout.prop(settings, "jaw_amp", slider=True)
         
 
 class GenerateKeyframesSubPanel(bpy.types.Panel):
@@ -803,12 +801,323 @@ class AutoLipSyncPanel(bpy.types.Panel):
             alert_row = layout.row()
             alert_row.label(text="Select a target rig to start", icon='INFO')
 
+
+
+class SetupSettings(bpy.types.PropertyGroup):
+    INSTALLATION_OPTIONS = [
+        ("CPU_Install", "CPU Dependencies", "CPU Dependencies"),
+        ("GPU_Install", "GPU Dependencies", "GPU Dependencies (Requires CUDA 12.8)",)
+    ]
+
+    installations: bpy.props.EnumProperty(
+        name="",
+        items=INSTALLATION_OPTIONS,
+        default="CPU_Install"
+    )
+
+    cpu_installed: bpy.props.BoolProperty(
+        name="CPU Installed",
+        default=False
+    )
+
+    torch_installed: bpy.props.BoolProperty(
+        name="GPU Installed",
+        default=False
+    )
+
+    cuda_build: bpy.props.BoolProperty(
+        name="CUDA Build",
+        default=False
+    )
+
+    cuda_available: bpy.props.BoolProperty(
+        name="CUDA Available",
+        default=False
+    )
+
+    needs_refresh: bpy.props.BoolProperty(default=True)
+
+    installing: bpy.props.BoolProperty(default=False)
+
+    install_log: bpy.props.StringProperty(
+        name="Install Status",
+        default=""
+    )
+
+
+def refresh_dependency_state(scene):
+    importlib.invalidate_caches()
+    print("Refreshing dependency state...")
+
+    setup = scene.setup
+    cpu_required = ["whisperx", "phonemizer"]
+    gpu_required = ["torch", "whisperx"]
+    existing_deps = subprocess.check_output([sys.executable, "-m", "pip", "list"]).decode("utf-8")
+
+    # CPU
+    setup.cpu_installed = all(pkg in existing_deps.lower() for pkg in cpu_required)
+
+    # GPU
+    setup.gpu_installed = all(pkg in existing_deps.lower() for pkg in gpu_required)
+
+    # CUDA
+    try:
+        import torch
+        setup.cuda_build = torch.version.cuda is not None
+        setup.cuda_available = torch.cuda.is_available()
+    except Exception:
+        setup.cuda_build = False
+        setup.cuda_available = False
+
+    setup.needs_refresh = False
+    
+
+# def refresh_dependency_state(scene):
+#     importlib.invalidate_caches()
+
+#     setup = scene.setup
+
+#     # ---- CPU deps (runtime import check, NOT pip list)
+#     cpu_required = ["whisperx", "phonemizer"]
+
+#     def is_importable(pkg):
+#         return importlib.util.find_spec(pkg) is not None
+
+#     setup.cpu_installed = all(is_importable(p) for p in cpu_required)
+
+#     # ---- Torch presence
+#     torch_spec = importlib.util.find_spec("torch")
+#     setup.torch_installed = torch_spec is not None
+
+#     # ---- CUDA build + runtime
+#     try:
+#         import torch
+
+#         setup.cuda_build = torch.version.cuda is not None
+#         setup.cuda_available = torch.cuda.is_available()
+
+#     except Exception:
+#         setup.cuda_build = False
+#         setup.cuda_available = False
+
+#     setup.needs_refresh = False
+
+
+def monitor_install():
+    global INSTALL_PROCESS, INSTALL_SCENE
+
+    if INSTALL_PROCESS is None:
+        return None
+
+    setup = INSTALL_SCENE.setup
+
+    line = INSTALL_PROCESS.stdout.readline()
+
+    if line:
+        setup.install_log = line.strip()
+
+    if INSTALL_PROCESS.poll() is not None:
+
+        # Consume any remaining output
+        remaining = INSTALL_PROCESS.stdout.read()
+
+        if remaining:
+            lines = [l.strip() for l in remaining.splitlines() if l.strip()]
+            if lines:
+                setup.install_log = lines[-1]
+                print(setup.install_log)
+
+        if INSTALL_PROCESS.returncode == 0:
+            setup.install_log = "Installation complete."
+        else:
+            setup.install_log = "Installation failed."
+
+        setup.installing = False
+
+        refresh_dependency_state(INSTALL_SCENE)
+
+        INSTALL_PROCESS = None
+        INSTALL_SCENE = None
+
+        return None
+
+    return 0.5
+
+class InstallDependenciesOperator(bpy.types.Operator):
+    bl_idname = "als.install_dependencies"
+    bl_label = "Install Dependencies"
+
+    def execute(self, context):
+        global INSTALL_PROCESS, INSTALL_SCENE
+
+        setup = context.scene.setup
+
+        # addon_dir = Path(bpy.utils.user_resource('SCRIPTS', path="addons")) / "AutoLipSync"
+        # requirements_dir = addon_dir / "requirements"
+
+        requirements_dir = "C:/Users/SPIRO/Documents/auto-lip-sync/requirements"
+
+        if setup.installations == "CPU_Install":
+            requirements_file = f"{requirements_dir}/cpu_requirements.txt"
+        else:
+            requirements_file = f"{requirements_dir}/gpu_requirements.txt"
+
+        python_exe = sys.executable
+
+        command = [python_exe, "-m", "pip", "install", "-r", str(requirements_file)]
+
+        setup.installing = True
+        setup.install_log = "Starting installation..."
+
+        # Installs into Blender's bundled Python environment
+        INSTALL_PROCESS = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+
+        INSTALL_SCENE = context.scene
+
+        bpy.app.timers.register(monitor_install)
+
+        self.report({'INFO'}, "Dependency installation started")
+
+        return {'FINISHED'}
+
+class SetupPanel(bpy.types.Panel):
+    bl_idname = "VIEW3D_PT_setup"
+    bl_category = "Auto Lip Sync"
+    bl_label = "Quick Setup"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):
+        setup = context.scene.setup
+        layout = self.layout
+
+        layout.label(text="Dependencies")
+        layout.prop(setup, "installations")
+
+        # ---- CPU
+        cpu_icon = "CHECKMARK" if setup.cpu_installed else "ERROR"
+        layout.label(
+            text=f"CPU Dependencies: {'Installed' if setup.cpu_installed else 'Not Installed'}",
+            icon=cpu_icon
+        )
+
+        # ---- GPU deps (torch + whisperx etc)
+        gpu_icon = "CHECKMARK" if setup.torch_installed else "ERROR"
+        layout.label(
+            text=f"PyTorch Installed: {'Yes' if setup.torch_installed else 'No'}",
+            icon=gpu_icon
+        )
+
+        # ---- CUDA build
+        cuda_build_icon = "CHECKMARK" if setup.cuda_build else "ERROR"
+        layout.label(
+            text=f"CUDA Build: {'Yes' if setup.cuda_build else 'No'}",
+            icon=cuda_build_icon
+        )
+
+        # ---- CUDA runtime
+        cuda_runtime_icon = "CHECKMARK" if setup.cuda_available else "ERROR"
+        layout.label(
+            text=f"CUDA Available: {'Yes' if setup.cuda_available else 'No'}",
+            icon=cuda_runtime_icon
+        )
+
+        # ---- install state
+        if setup.installing:
+            layout.label(text="Installing Dependencies...", icon="TIME")
+
+        if setup.install_log:
+            layout.label(text=setup.install_log)
+
+        # ---- install logic (clean + deterministic)
+        needs_cpu = not setup.cpu_installed
+        needs_gpu = (setup.installations == "GPU_Install" and not setup.torch_installed)
+
+        if not setup.installing:
+            if setup.installations == "CPU_Install" and needs_cpu:
+                layout.operator("als.install_dependencies", icon="IMPORT")
+
+            elif setup.installations == "GPU_Install" and (needs_cpu or needs_gpu):
+                layout.operator("als.install_dependencies", icon="IMPORT")
+
+
+# class SetupPanel(bpy.types.Panel):
+#     bl_idname = "VIEW3D_PT_setup"
+#     bl_category = "Auto Lip Sync"
+#     bl_label = "Quick Setup"
+#     bl_space_type = "VIEW_3D"
+#     bl_region_type = "UI"
+
+#     def draw(self, context):
+#         setup = context.scene.setup
+#         layout = self.layout
+
+#         layout.label(text="Dependencies")
+
+#         layout.prop(setup, "installations")
+
+#         # CPU
+#         cpu_icon = "CHECKMARK" if setup.cpu_installed else "ERROR"
+#         layout.label(
+#             text=f"CPU Dependencies: {'Installed' if setup.cpu_installed else 'Not Installed'}",
+#             icon=cpu_icon
+#         )
+
+#         # GPU
+#         gpu_icon = "CHECKMARK" if setup.gpu_installed else "ERROR"
+#         layout.label(
+#             text=f"GPU Dependencies: {'Installed' if setup.gpu_installed else 'Not Installed'}",
+#             icon=gpu_icon
+#         )
+
+#         # CUDA
+#         cuda_icon = "CHECKMARK" if setup.cuda_available else "ERROR"
+#         layout.label(
+#             text=f"CUDA Build: {'Yes' if setup.cuda_available else 'No'}",
+#             icon=cuda_icon
+#         )
+
+#         if setup.installing:
+#             layout.label(
+#                 text="Installing Dependencies...",
+#                 icon="TIME"
+#             )
+
+#         if setup.install_log:
+#             layout.label(
+#                 text=setup.install_log
+#             )
+
+#         # Install button logic
+#         needs_install = (
+#             (setup.installations == "CPU_Install" and not setup.cpu_installed) or
+#             (setup.installations == "GPU_Install" and not setup.gpu_installed)
+#         )
+
+#         if not setup.installing and needs_install:
+#             layout.operator("als.install_dependencies", icon="IMPORT")
+#         if not setup.installing and not setup.cuda_build:
+#             setup.installations == "GPU_Install"
+#             layout.operator("als.install_dependencies", icon="IMPORT")
+            
+        
+            
+
         
 classes = (
     VisemeItem,
     VisemeSetMappingGroup,
     AutoLipSyncSettings,
     AudioToVisemeOperator,
+    InstallDependenciesOperator,
+    SetupSettings,
+    SetupPanel,
     AutoLipSyncPanel,
     VisemeMappingSubPanel,
     AnimationSettingsSubPanel,
@@ -818,9 +1127,18 @@ classes = (
 
 def register():
     for cls in classes: bpy.utils.register_class(cls)
-    
+
+    bpy.types.Scene.setup = bpy.props.PointerProperty(
+        type=SetupSettings
+    )
+
     bpy.types.Scene.auto_lip_sync = bpy.props.PointerProperty(
         type=AutoLipSyncSettings
+    )
+
+    bpy.app.timers.register(
+        lambda: refresh_dependency_state(bpy.context.scene),
+        first_interval=1.0
     )
 
     initialize_viseme_data(None)

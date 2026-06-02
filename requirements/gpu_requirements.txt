@@ -1,0 +1,12 @@
+torch==2.8.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+torchvision==0.23.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+torchaudio==2.8.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+transformers>=4.48.0
+huggingface-hub<1.0.0
+tokenizers
+whisperx==3.8.5 --no-deps
+faster-whisper
+pyannote.audio
+torchcodec==0.7.0
+py-espeak-ng
+phonemizer

@@ -25,7 +25,7 @@ def cleanup_visemes(visemes, viseme_mapping, settings_dict):
     mouth_close_delay = settings_dict["mouth_close_delay"]
     cleaned_dict = {}
     cleaned = []
-    current_frame = 0 
+    current_frame = settings_dict["render_start"]
 
     if not visemes:
         return {}

@@ -1,0 +1,6 @@
+transformers>=4.48.0
+huggingface-hub<1.0.0
+tokenizers
+whisperx==3.8.5
+py-espeak-ng
+phonemizer
