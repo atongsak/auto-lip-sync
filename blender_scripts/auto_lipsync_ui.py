@@ -11,13 +11,14 @@ bl_info = {
 
 import bpy
 from bpy_extras import anim_utils
+from bpy.app.handlers import persistent
 import subprocess
 import json
 import os
 import re
 import queue
 import threading
-from bpy.app.handlers import persistent
+
 
 # TODO: Have these virtual environments be created for the user via subprocess operator
 VENVS = {
@@ -66,38 +67,38 @@ def initialize_viseme_data(dummy):
 bpy.app.handlers.load_post.append(initialize_viseme_data)
 
 
-# Returns dict of name, start/end frames, and file path of audio strips on target channel
-def get_target_audio_strips(context):
+# Returns file path to created target channel audio wav 
+def get_target_audio_path(context):
     scene = context.scene
     target_channel = int(scene.auto_lip_sync.target_channel)
 
-    all_audio_strips = []
-    target_audio_strips = []
+    original_mute_states = {}
 
-    for strip in scene.sequence_editor.strips_all:
-        if strip.type == 'SOUND' and strip.channel == target_channel:
-            all_audio_strips.append(strip)
+    try:
+        for strip in scene.sequence_editor.strips_all:
+            # Save original mute states of strips in VSE
+            original_mute_states[strip.name] = strip.mute
+
+            # Mute strips that aren't in target channel
+            if strip.channel != target_channel:
+                strip.mute = True
     
-    # Sort by timeline position
-    all_audio_strips.sort(key=lambda s: s.frame_final_start)
-        
-    target_audio_dict = {
-        "start": all_audio_strips[0].frame_final_start,
-        "end": all_audio_strips[-1].frame_final_end
-    }    
+        output_path = os.path.join(bpy.app.tempdir, "target_audio.wav")
 
-    for strip in all_audio_strips:
-        target_audio_strips.append({
-            "name": strip.name,
-            "start": strip.frame_final_start, 
-            "end": strip.frame_final_end,
-            "offset": strip.frame_offset_start,
-            "path": bpy.path.abspath(strip.sound.filepath)
-        })   
-            
-    target_audio_dict["strips"] = target_audio_strips
-        
-    return target_audio_dict
+        # Create wav of rendered audio in target channel
+        bpy.ops.sound.mixdown(
+            filepath=output_path,
+            container='WAV',
+            codec='PCM',
+            format='S16'
+        )
+
+    finally:  
+        # Revert mute states of strips in VSE
+        for strip in scene.sequence_editor.strips_all:
+            strip.mute = original_mute_states[strip.name]
+
+    return output_path
 
 
 # Returns dict of mapped visemes
@@ -124,8 +125,19 @@ class AudioToVisemeOperator(bpy.types.Operator):
         settings.is_generating = True
         settings.progress = 0.0
         
-        target_audio_dict = get_target_audio_strips(context)
         mapped_visemes_dict = get_mapped_visemes(context)
+        target_audio_path = get_target_audio_path(context)
+        
+        # Check file size of target channel audio wav
+        file_size = os.path.getsize(target_audio_path)
+        limit_bytes = 25 * 1024 * 1024 # Whisper can handle files <25 MB
+        
+        if file_size > limit_bytes:
+            self.report(
+                {'WARNING'}, 
+                f"Rendered audio in target channel exceeds 25 MB ({file_size} bytes)."
+            )
+            return {'CANCELLED'}
         
         settings_dict = {
             "fps": context.scene.render.fps,
@@ -134,8 +146,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
             "viseme_set": settings.viseme_set,
             "model_size": settings.model_size,
             "mouth_close_delay": settings.mouth_close_delay,
-            "jaw_amp": settings.jaw_amp,
-            "audio": target_audio_dict,
+            "audio_path": target_audio_path,
             "visemes": mapped_visemes_dict
         }
         
@@ -151,25 +162,25 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
         self.process = subprocess.Popen(
                         command,
-                        stdout = subprocess.PIPE, # Save command's output into var instead of printing
-                        stderr = subprocess.STDOUT,
-                        text = True
+                        #stdout = subprocess.PIPE, # Save command's output into var instead of printing
+                        #stderr = subprocess.STDOUT,
+                        #text = True
                     )
         
         self.queue = queue.Queue()
                         
-        def enqueue_output(pipe, q):
-            for line in iter(pipe.readline, ''):
-                q.put(line)
-            pipe.close()
+        # def enqueue_output(pipe, q):
+        #     for line in iter(pipe.readline, ''):
+        #         q.put(line)
+        #     pipe.close()
             
         # Create thread to read progress logs from main.py
-        self.thread = threading.Thread(
-            target=enqueue_output,
-            args=(self.process.stdout, self.queue),
-            daemon=True
-        )
-        self.thread.start()
+        # self.thread = threading.Thread(
+        #     target=enqueue_output,
+        #     args=(self.process.stdout, self.queue),
+        #     daemon=True
+        # )
+        # self.thread.start()
                     
         wm = context.window_manager
         self.timer = wm.event_timer_add(0.1, window=context.window)
@@ -246,21 +257,26 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
         for i, keyframe in enumerate(keyframe_data_dict["keyframes"]):
             viseme = keyframe["viseme"]
-            pose_asset = viseme_lookup[viseme]
+            pose_asset = viseme_lookup.get(viseme)
+
+            if pose_asset is None:
+                continue
             
             for slot in pose_asset.slots:
                 channelbag = anim_utils.action_get_channelbag_for_slot(pose_asset, slot)
                 for fc in channelbag.fcurves:
                     self.apply_fcurve(armature, fc, keyframe["start"])
 
-                    # We need to insert two keyframes to hold sil visemes that aren't at the end
-                    # one at the start frame and another at the end frame
+                    # Insert two keyframes to hold sil visemes that aren't at the end
+                    # One at the start frame and another at the end frame
                     if viseme == "sil" and i != len(keyframe_data_dict["keyframes"])-1:
                         self.apply_fcurve(armature, fc, keyframe["end"]-1)
                         
             # Update progress bar for every keyframe being inserted
             local = (i + 1) / len(keyframe_data_dict["keyframes"])
             settings.progress = settings.progress + local * 0.2
+            for area in context.screen.areas:
+                area.tag_redraw()
             
     # Clears existing keyframes within the rendered range for relevant bones
     # Used before insertion and only affects bone properties about to be keyframed
@@ -276,6 +292,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
         # For each pose asset in the viseme mapping table
         for item in settings.viseme_mappings:
             pose_asset = item.pose_asset 
+
             if not pose_asset:
                 continue
 
@@ -306,29 +323,44 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
                 fc.update()
 
-        settings.progress = 0.75
     
     # Periodically checks subprocess status and inserts keyframes when done
     def modal(self, context, event):    
         settings = context.scene.auto_lip_sync
+        armature = settings.target_rig
         SUBPROCESS_WEIGHT = 0.7
+        action_name = f"AutoLipSync_{armature.name}"
         
-        if event.type == 'TIMER':
-            # If subprocess is still running    
-            try:
-                while True:
-                    line = self.queue.get_nowait()
-                    if line.startswith("PROGRESS"):
-                        settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
-                        for area in context.screen.areas:
-                            area.tag_redraw()
-            except queue.Empty:
-                pass
+        # if event.type == 'TIMER':
+        #     # If subprocess is still running    
+        #     try:
+        #         while True:
+        #             line = self.queue.get_nowait()
+        #             if line.startswith("PROGRESS"):
+        #                 settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
+        #                 for area in context.screen.areas:
+        #                     area.tag_redraw()
+        #     except queue.Empty:
+        #         pass
 
         # Subprocess finished 
         if self.process.poll() is not None:
+            if armature.animation_data is None:
+                armature.animation_data_create()
+
+            action = bpy.data.actions.get(action_name)
+
+            # Create auto lip sync action for the target rig
+            if action is None:
+                action = bpy.data.actions.new(action_name)
+
+            armature.animation_data.action = action
+
+            # Clear existing keyframes if enabled
             if settings.clear_existing_keyframes:
                 self.clear_keyframes(context)
+
+            # Insert keyframes
             self.insert_keyframes(context)
 
             wm = context.window_manager
@@ -339,6 +371,11 @@ class AudioToVisemeOperator(bpy.types.Operator):
                 area.tag_redraw()
             
             settings.is_generating = False
+
+            self.report(
+                {'INFO'}, 
+                f"Lip sync generated in Action '{action.name}'"
+            )
 
             return {'FINISHED'}
         
@@ -454,19 +491,6 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
                 )
                     
         return items or [("None", "No audio", "No sound strips found")]
-
-    # Makes sure stored viseme mappings is initialized 
-    # def ensure_initialized(self):
-    #     expected = len(VISEME_SETS[self.viseme_set]["visemes"])
-
-    #     valid = (
-    #         len(self.viseme_mappings) == expected 
-    #         and all(v.viseme_name for v in self.viseme_mappings)
-    #     )
-
-    #     if not valid:
-    #         self.init_viseme_set_mappings()
-    #         self.rebuild_viseme_mappings()
 
     # Valid/invalid state of viseme mappings
     def viseme_mappings_valid(self):
@@ -607,13 +631,13 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         description="How many frames silence should last before closing the mouth"
     )
     
-    jaw_amp: bpy.props.FloatProperty(
-        name="Amplitude",
-        default=0.0,
-        min=0.0,
-        max=10.0, 
-        description="Jaw amplification"
-    )
+    # jaw_amp: bpy.props.FloatProperty(
+    #     name="Amplitude",
+    #     default=0.0,
+    #     min=0.0,
+    #     max=10.0, 
+    #     description="Jaw amplification"
+    # )
 
     progress: bpy.props.FloatProperty(
         name="Progress",

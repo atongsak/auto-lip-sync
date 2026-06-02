@@ -21,28 +21,19 @@ def normalize_token(token: str) -> list[str]:
 
 # Cleans viseme list and stores into keyframe dict
 def cleanup_visemes(visemes, viseme_mapping, settings_dict):
-    render_start = settings_dict["render_start"]
     render_end = settings_dict["render_end"]
     mouth_close_delay = settings_dict["mouth_close_delay"]
     cleaned_dict = {}
     cleaned = []
-    current_frame = 0
+    current_frame = 0 
 
     if not visemes:
         return {}
 
     for v in visemes:
-        start_frame = v["start"] - v["strip_offset"]
-        end_frame = v["end"] - v["strip_offset"]
+        start_frame = v["start"] 
+        end_frame = v["end"]
 
-        # Ignore visemes cut off by left and right trim
-        if start_frame < v["strip_start"] or start_frame >= v["strip_end"]:
-            continue
-
-        # Ignore visemes not within rendered range
-        if start_frame < render_start or start_frame >= render_end:
-            continue
-        
         # If gap between visemes, insert sil
         if start_frame > current_frame + mouth_close_delay:
             hold_end = current_frame + mouth_close_delay
@@ -82,7 +73,8 @@ def cleanup_visemes(visemes, viseme_mapping, settings_dict):
     return cleaned_dict
 
 # Creates a viseme timing list using phoneme timing data
-def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, strip_end, strip_offset, settings_dict):
+def phonemes_to_visemes(phoneme_timings, viseme_mapping, settings_dict):
+    render_start = settings_dict["render_start"]
     fps = settings_dict["fps"]
     mouth_close_delay = settings_dict["mouth_close_delay"]
     results = []
@@ -90,9 +82,9 @@ def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, strip_end,
     for p in phoneme_timings:
         raw_token = p["char"]
 
-        # Convert phoneme timing from seconds to frames, take into account strip edits
-        start = (p["start"] * fps) + strip_start
-        end = (p["end"] * fps) + strip_start
+        # Convert phoneme timing from seconds to frames, taking into account render start
+        start = (p["start"] * fps) + render_start
+        end = (p["end"] * fps) + render_start
 
         # Handle multi-char phoneme tokens
         tokens = normalize_token(raw_token)
@@ -122,10 +114,7 @@ def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, strip_end,
                     "token": "sil",
                     "viseme": viseme,
                     "start": def_start,
-                    "end": end,
-                    "strip_start": strip_start,
-                    "strip_end": strip_end,
-                    "strip_offset": strip_offset
+                    "end": end
                 })
                 continue
 
@@ -149,10 +138,7 @@ def phonemes_to_visemes(phoneme_timings, viseme_mapping, strip_start, strip_end,
                 "token": token,
                 "viseme": viseme,
                 "start": start,
-                "end": end,
-                "strip_start": strip_start,
-                "strip_end": strip_end,
-                "strip_offset": strip_offset
+                "end": end
             })
 
     return results
