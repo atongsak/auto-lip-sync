@@ -3,14 +3,13 @@ import sys
 import subprocess
 from pathlib import Path
 from ..core.install_monitor import monitor_install
+from ..core import runtime_state
 
 class InstallDependenciesOperator(bpy.types.Operator):
     bl_idname = "als.install_dependencies"
     bl_label = "Install Dependencies"
 
     def execute(self, context):
-        global INSTALL_PROCESS, INSTALL_SCENE
-
         setup = context.scene.setup
 
         addon_root = Path(__file__).parent.parent
@@ -24,7 +23,7 @@ class InstallDependenciesOperator(bpy.types.Operator):
         setup.install_log = "Starting installation..."
 
         # Installs into Blender's bundled Python environment
-        INSTALL_PROCESS = subprocess.Popen(
+        runtime_state.INSTALL_PROCESS = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -32,7 +31,7 @@ class InstallDependenciesOperator(bpy.types.Operator):
             bufsize=1
         )
 
-        INSTALL_SCENE = context.scene
+        runtime_state.INSTALL_SCENE = context.scene
 
         bpy.app.timers.register(monitor_install)
 

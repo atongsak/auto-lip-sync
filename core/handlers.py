@@ -1,5 +1,6 @@
 import bpy
 from bpy.app.handlers import persistent
+from .dependency_manager import refresh_dependency_state
 
 @persistent
 def initialize_viseme_data(dummy):
@@ -11,3 +12,8 @@ def initialize_viseme_data(dummy):
         
         if not settings.viseme_mappings:
             settings.rebuild_viseme_mappings()
+
+@persistent
+def refresh_on_load(dummy):
+    for scene in bpy.data.scenes:
+        refresh_dependency_state(scene)

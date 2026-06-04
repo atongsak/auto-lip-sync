@@ -1,21 +1,23 @@
 from ..core.dependency_manager import refresh_dependency_state
+from . import runtime_state 
 
 def monitor_install():
-    global INSTALL_PROCESS, INSTALL_SCENE
-
-    if INSTALL_PROCESS is None:
+    if runtime_state.INSTALL_PROCESS is None:
+        print("No installation running. Stopping timer.")
         return None
 
-    setup = INSTALL_SCENE.setup
+    setup = runtime_state.INSTALL_SCENE.setup
 
-    line = INSTALL_PROCESS.stdout.readline()
+    line = runtime_state.INSTALL_PROCESS.stdout.readline()
 
     if line:
         setup.install_log = line.strip()
 
-    if INSTALL_PROCESS.poll() is not None:
+    if runtime_state.INSTALL_PROCESS.poll() is not None:
+        print("Installation complete")
+
         # Consume any remaining output
-        remaining = INSTALL_PROCESS.stdout.read()
+        remaining = runtime_state.INSTALL_PROCESS.stdout.read()
 
         if remaining:
             lines = [l.strip() for l in remaining.splitlines() if l.strip()]
@@ -23,17 +25,17 @@ def monitor_install():
                 setup.install_log = lines[-1]
                 print(setup.install_log)
 
-        if INSTALL_PROCESS.returncode == 0:
+        if runtime_state.INSTALL_PROCESS.returncode == 0:
             setup.install_log = "Installation complete."
         else:
             setup.install_log = "Installation failed."
 
         setup.installing = False
 
-        refresh_dependency_state(INSTALL_SCENE)
+        refresh_dependency_state(runtime_state.INSTALL_SCENE)
 
-        INSTALL_PROCESS = None
-        INSTALL_SCENE = None
+        runtime_state.INSTALL_PROCESS = None
+        runtime_state.INSTALL_SCENE = None
 
         return None
 

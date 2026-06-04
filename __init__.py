@@ -24,7 +24,7 @@ from .ui.properties import VisemeItem, VisemeSetMappingGroup, AutoLipSyncSetting
 from .ui.setup_panel import SetupPanel
 from .operators.audio_to_viseme import AudioToVisemeOperator
 from .operators.install_dependencies import InstallDependenciesOperator
-from .core.handlers import initialize_viseme_data
+from .core.handlers import initialize_viseme_data, refresh_on_load
 from .core.dependency_manager import refresh_dependency_state
 
 EspeakWrapper = None
@@ -77,12 +77,22 @@ def register():
             initialize_viseme_data
         )
 
+    if refresh_on_load not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(
+            refresh_on_load
+        )
+
     bpy.app.timers.register(
         delayed_refresh,
-        first_interval=3.0
+        first_interval=1.0
     )
         
 def unregister():
+    if refresh_on_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(
+            refresh_on_load
+        )
+
     if initialize_viseme_data in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(
             initialize_viseme_data
