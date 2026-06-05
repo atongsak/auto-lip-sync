@@ -10,6 +10,7 @@ from bpy_extras import anim_utils
 from pathlib import Path
 from ..core.visemes import get_mapped_visemes
 from ..core.audio import get_target_audio_path
+from ..core.ffmpeg_path import get_ffmpeg_path
 
 class AudioToVisemeOperator(bpy.types.Operator): 
     bl_idname = "wm.run_subprocess"
@@ -45,8 +46,17 @@ class AudioToVisemeOperator(bpy.types.Operator):
             "audio_path": target_audio_path,
             "visemes": mapped_visemes_dict
         }
-        
+
         addon_root = Path(__file__).parent.parent
+
+        # Copy the user's current env vars into new dict
+        env = os.environ.copy()
+        ffmpeg_dir = get_ffmpeg_path()
+        print(ffmpeg_dir.exists())
+        print((ffmpeg_dir / "ffmpeg.exe").exists())
+
+        # Prepend ffmpeg dir to the search paths
+        env["PATH"] = str(ffmpeg_dir) + os.pathsep + env["PATH"]
 
         temp_dir = Path(bpy.app.tempdir)
         settings_path = temp_dir / "settings.json"
@@ -64,6 +74,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
         self.process = subprocess.Popen(
                         command,
+                        env=env,
                         # stdout = subprocess.PIPE, # Save command's output into var instead of printing
                         # stderr = subprocess.STDOUT,
                         text = True

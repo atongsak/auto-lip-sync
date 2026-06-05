@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import argparse
+import shutil
 
 def init_espeak():
     import platform
@@ -30,6 +31,10 @@ def parse_args():
     return parser.parse_known_args(sys.argv[sys.argv.index("--") + 1:])[0]
 
 def main():
+    print("PATH =", os.environ["PATH"])
+    print("ffmpeg =", shutil.which("ffmpeg"))
+    print("ffprobe =", shutil.which("ffprobe"))
+
     settings_dict = {}
     args = parse_args()
 
