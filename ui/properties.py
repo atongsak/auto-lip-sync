@@ -91,7 +91,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         # Update prev_viseme_set
         self.prev_viseme_set = self.viseme_set
 
-    # Returns list of audio channels to propagate dropdown
+    # Returns list of active audio channels to propagate dropdown
     def list_audio_channels(self, context):
         scene = context.scene
         items = [] 
@@ -104,11 +104,13 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
                     channels.add(strip.channel)
             
             for channel in sorted(channels):
-                items.append(
-                    (str(channel),
-                    f"Channel {channel}",
-                    f"Audio channel {channel}")
-                )
+                channel_name = f"Channel {channel}"
+                if scene.sequence_editor.channels[channel_name].mute == False:
+                    items.append(
+                        (str(channel),
+                        channel_name,
+                        f"Audio channel {channel}")
+                    )
                     
         return items or [("None", "No audio", "No sound strips found")]
 
@@ -177,6 +179,20 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
 
         return True, None
         
+    # Returns list of actions to propagate dropdown
+    def list_actions(self, context):
+        scene = context.scene
+        items = [] 
+        
+        for action in bpy.data.actions:
+            items.append(
+                (action.name,
+                    action.name,
+                    action.name)
+            )
+
+        return items or [("None", "No actions", "No actions found")]
+
     VISEME_SET_ITEMS = [
         ("MICROSOFT_22", "22 Visemes", "Microsoft's 22 viseme set"),
         ("META_15", "15 Visemes", "Meta's 15 viseme set"),
@@ -195,6 +211,11 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
     COMPUTE_OPTIONS = [
         ("CPU_COMPUTE", "CPU", "Run ASR model on CPU")
     ]
+
+    ACTION_OPTIONS = [
+        ("open_action", "Open Action", "Insert keyframes into active/open action in the Action Editor"),
+        ("choose_action", "Choose Action", "Enable a dropdown to choose what action to insert keyframes into")
+    ]
     
     target_rig: bpy.props.PointerProperty(
         name="",
@@ -211,6 +232,17 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
 
     prev_viseme_set: bpy.props.StringProperty(
         default="MICROSOFT_22"
+    )
+
+    action_pref: bpy.props.EnumProperty(
+        name="",
+        items=ACTION_OPTIONS,
+        default="open_action"
+    )
+
+    target_action: bpy.props.EnumProperty(
+        name="",
+        items=list_actions
     )
     
     target_channel: bpy.props.EnumProperty(
@@ -249,7 +281,7 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         max=20, # 20 frames
         description="How many frames silence should last before closing the mouth"
     )
-    
+
     progress: bpy.props.FloatProperty(
         name="Progress",
         subtype='FACTOR',
@@ -258,8 +290,16 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
         max=1.0
     )
     
+    progress_message: bpy.props.StringProperty(
+        default="Initializing variables..."
+    )
+
     is_generating: bpy.props.BoolProperty(
         default=False
+    )
+
+    detected_transcript: bpy.props.StringProperty(
+        default=""
     )
 
 
@@ -272,6 +312,11 @@ class SetupSettings(bpy.types.PropertyGroup):
         name="",
         items=INSTALLATION_OPTIONS,
         default="CPU_Install"
+    )
+
+    ffmpeg_installed = bpy.props.BoolProperty(
+        name="FFmpeg Installed",
+        default=False
     )
 
     cpu_installed: bpy.props.BoolProperty(

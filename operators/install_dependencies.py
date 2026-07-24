@@ -10,7 +10,7 @@ class InstallDependenciesOperator(bpy.types.Operator):
     bl_label = "Install Dependencies"
 
     def execute(self, context):
-        setup = context.scene.setup
+        setup = context.window_manager.setup
 
         addon_root = Path(__file__).parent.parent
         requirements_path = addon_root / "requirements" / "cpu_requirements.txt"

@@ -10,17 +10,18 @@ from bpy_extras import anim_utils
 from pathlib import Path
 from ..core.visemes import get_mapped_visemes
 from ..core.audio import get_target_audio_path
-from ..core.ffmpeg_path import get_ffmpeg_path
 
 class AudioToVisemeOperator(bpy.types.Operator): 
     bl_idname = "wm.run_subprocess"
-    bl_label = "Function that runs the audio-to-viseme process"     
+    bl_label = "Function that runs the audio-to-viseme process"   
+    bl_description = "Generate and insert lip sync keyframes into the target action"  
             
     # Writes settings.json, starts subprocess, starts timer/modal loop
     def execute(self, context):
         settings = context.scene.auto_lip_sync
         settings.is_generating = True
         settings.progress = 0.0
+        self.status = None
         
         mapped_visemes_dict = get_mapped_visemes(context)
         target_audio_path = get_target_audio_path(context)
@@ -30,6 +31,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
         limit_bytes = 25 * 1024 * 1024 # Whisper can handle files <25 MB
         
         if file_size > limit_bytes:
+            settings.is_generating = False
             self.report(
                 {'WARNING'}, 
                 f"Rendered audio in target channel exceeds 25 MB ({file_size} bytes)."
@@ -47,57 +49,55 @@ class AudioToVisemeOperator(bpy.types.Operator):
             "visemes": mapped_visemes_dict
         }
 
-        addon_root = Path(__file__).parent.parent
-
-        # Copy the user's current env vars into new dict
-        env = os.environ.copy()
-        ffmpeg_dir = get_ffmpeg_path()
-        print(ffmpeg_dir.exists())
-        print((ffmpeg_dir / "ffmpeg.exe").exists())
-
-        # Prepend ffmpeg dir to the search paths
-        env["PATH"] = str(ffmpeg_dir) + os.pathsep + env["PATH"]
-
+        # Save user preferences to settings.json
         temp_dir = Path(bpy.app.tempdir)
         settings_path = temp_dir / "settings.json"
-
-        print(bpy.app.tempdir)
-
         with open(settings_path, 'w', encoding='utf-8') as f:
             text = json.dumps(settings_dict, indent=4)
             f.write(text)
 
+        addon_root = Path(__file__).parent.parent
         pipeline_script = addon_root / "pipeline" / "main.py"
+
+        print(addon_root)
         
-        python_exe = sys.executable
-        command = [python_exe, "-u", str(pipeline_script), "--", "--file", str(settings_path), "--compute", settings.compute]
+        # Execute audio-to-keyframes pipeline
+        command = [sys.executable, "-u", str(pipeline_script), "--", "--file", str(settings_path), "--compute", settings.compute]
 
         self.process = subprocess.Popen(
-                        command,
-                        env=env,
-                        # stdout = subprocess.PIPE, # Save command's output into var instead of printing
-                        # stderr = subprocess.STDOUT,
-                        text = True
-                    )
+            command,
+            stdout = subprocess.PIPE, # Save command's output into var instead of printing
+            stderr = subprocess.STDOUT,
+            text = True,
+            bufsize = 1
+        )
         
-        # self.queue = queue.Queue()
+        self.queue = queue.Queue()
                         
-        # def enqueue_output(pipe, q):
-        #     for line in iter(pipe.readline, ''):
-        #         q.put(line)
-        #     pipe.close()
+        def enqueue_output(pipe, q):
+            for line in iter(pipe.readline, ''):
+                q.put(line)
+            pipe.close()
             
         # Create thread to read progress logs from main.py
-        # self.thread = threading.Thread(
-        #     target=enqueue_output,
-        #     args=(self.process.stdout, self.queue),
-        #     daemon=True
-        # )
-        # self.thread.start()
+        self.thread = threading.Thread(
+            target=enqueue_output,
+            args=(self.process.stdout, self.queue),
+            daemon=True
+        )
+        self.thread.start()
                     
         wm = context.window_manager
         self.timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
+
+        self.text = []
+        settings.detected_transcript = ""
+        self.inserting_keyframes = False
+
+        # Initialize target action
+        if settings.action_pref == "open_action":
+            settings.target_action = context.object.animation_data.action.name
             
         return {'RUNNING_MODAL'}
         
@@ -118,14 +118,14 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
             # Get bone and its property
             bone = obj.path_resolve(bone_expr)
-            val = bone[prop_name]
+            bone_prop = bone[prop_name]
             
             # Skip properties that are non-numeric
-            if not isinstance(val, float):
+            if not isinstance(bone_prop, float):
                 return
             
             # Apply the fcurve to the bone property and insert keyframe
-            bone[prop_name] = value
+            bone_prop = value
             bone.keyframe_insert(data_path=f'["{prop_name}"]', frame=frame)
             return
 
@@ -155,49 +155,36 @@ class AudioToVisemeOperator(bpy.types.Operator):
                 data_path=prop_name,
                 frame=frame
             )
-    
-    # Inserts keyframes based on keyframe_data.json created by audio-to-viseme pipeline
-    def insert_keyframes(self, context):
+         
+    # Applies pose asset at specified keyframe
+    def insert_one_keyframe(self, context, i):
         settings = context.scene.auto_lip_sync
         armature = settings.target_rig
+
+        # Find the corresponding pose asset to a detected viseme
+        keyframe = self.keyframes[i]
+        viseme = keyframe["viseme"]
+        pose_asset = self.viseme_lookup.get(viseme)
+
+        # Skip if missing pose asset
+        if pose_asset is None:
+            return
         
-        temp_dir = Path(bpy.app.tempdir)
-        keyframe_data_path = temp_dir / "keyframe_data.json"
+        # Shift keyframes by -4.2f to account for anatomical accuracy
+        keyframe["start"] -= 4.2
+        keyframe["end"] -= 4.2
+        
+        # Apply pose asset to current keyframe
+        for slot in pose_asset.slots:
+            channelbag = anim_utils.action_get_channelbag_for_slot(pose_asset, slot)
+            for fc in channelbag.fcurves:
+                self.apply_fcurve(armature, fc, keyframe["start"])
 
-        if not os.path.exists(keyframe_data_path):
-            self.report({'ERROR'}, "Keyframe file not generated (subprocess failed)")
-            return {'CANCELLED'}
+                # Insert two keyframes to hold sil visemes that aren't at the end
+                # One at the start frame and another at the end frame
+                if viseme == "sil" and i != self.last_keyframe_index:
+                    self.apply_fcurve(armature, fc, keyframe["end"]-1)
 
-        with open(keyframe_data_path, 'r') as f:
-            keyframe_data_dict = json.load(f)
-
-        viseme_lookup = {}
-        for item in settings.viseme_mappings:
-            viseme_lookup[item.viseme_name] = item.pose_asset
-
-        for i, keyframe in enumerate(keyframe_data_dict["keyframes"]):
-            viseme = keyframe["viseme"]
-            pose_asset = viseme_lookup.get(viseme)
-
-            if pose_asset is None:
-                continue
-            
-            for slot in pose_asset.slots:
-                channelbag = anim_utils.action_get_channelbag_for_slot(pose_asset, slot)
-                for fc in channelbag.fcurves:
-                    self.apply_fcurve(armature, fc, keyframe["start"])
-
-                    # Insert two keyframes to hold sil visemes that aren't at the end
-                    # One at the start frame and another at the end frame
-                    if viseme == "sil" and i != len(keyframe_data_dict["keyframes"])-1:
-                        self.apply_fcurve(armature, fc, keyframe["end"]-1)
-                        
-            # Update progress bar for every keyframe being inserted
-            local = (i + 1) / len(keyframe_data_dict["keyframes"])
-            settings.progress = settings.progress + local * 0.2
-            for area in context.screen.areas:
-                area.tag_redraw()
-            
     # Clears existing keyframes within the rendered range for relevant bones
     # Used before insertion and only affects bone properties about to be keyframed
     def clear_keyframes(self, context):
@@ -243,59 +230,134 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
                 fc.update()
 
-    
     # Periodically checks subprocess status and inserts keyframes when done
     def modal(self, context, event):    
         settings = context.scene.auto_lip_sync
         armature = settings.target_rig
-        SUBPROCESS_WEIGHT = 0.7
-        action_name = f"AutoLipSync_{armature.name}"
-        
-        # if event.type == 'TIMER':
-        #     # If subprocess is still running    
-        #     try:
-        #         while True:
-        #             line = self.queue.get_nowait()
-        #             if line.startswith("PROGRESS"):
-        #                 settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
-        #                 for area in context.screen.areas:
-        #                     area.tag_redraw()
-        #     except queue.Empty:
-        #         pass
+        wm = context.window_manager
+        SUBPROCESS_WEIGHT = 0.5
+        BATCH_SIZE = 40
 
-        # Subprocess finished 
-        if self.process.poll() is not None:
+        # Cancel the operator if user presses ESC or right mouse
+        if event.type in {'RIGHTMOUSE', 'ESC'}:
+            wm.event_timer_remove(self.timer)
+            settings.is_generating = False
+            self.report(
+                {'WARNING'},
+                "Auto lip sync operation cancelled."
+            )
+            return {'CANCELLED'}
+
+        # STEP 1: If subprocess is still running    
+        if event.type == 'TIMER':
+            try:
+                # Keep consuming and processing print messages in queue until empty
+                while True:
+                    line = self.queue.get_nowait()
+                    if line.startswith("PROGRESS"):
+                        settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
+                        for area in context.screen.areas:
+                            area.tag_redraw()
+                    elif line.startswith("MESSAGE"):
+                        settings.progress_message = line.removeprefix("MESSAGE:").strip()
+                    elif line.startswith("STATUS"):
+                        self.status = line.removeprefix("STATUS:").strip()
+                        print(f"STATUS SET TO: {repr(self.status)}")
+                    elif line.startswith("TEXT"):
+                        # self.text += line.removeprefix("TEXT:").strip()
+                        self.text.append(line.removeprefix("TEXT:").strip())
+                        print(line.strip())
+            except queue.Empty:
+                pass
+            
+        # STEP 2: Once the subprocess is finished
+        if self.process.poll() is not None and not self.inserting_keyframes: 
+            if self.status == "NO_WORDS":
+                wm.event_timer_remove(self.timer)
+                settings.is_generating = False
+                self.report(
+                    {'WARNING'},
+                    "No words were detected in the selected audio channel."
+                )
+                return {'CANCELLED'}
+
             if armature.animation_data is None:
                 armature.animation_data_create()
 
-            action = bpy.data.actions.get(action_name)
-
-            # Create auto lip sync action for the target rig
-            if action is None:
-                action = bpy.data.actions.new(action_name)
-
-            armature.animation_data.action = action
+            # Get action to insert keyframes in
+            self.action = bpy.data.actions.get(settings.target_action)
+            # Create a new action if it doesn't exist
+            # TODO: Allow user to do this
+            if self.action is None:
+                self.action = bpy.data.actions.new(f"AutoLipSync_{armature.name}")
+            armature.animation_data.action = self.action
 
             # Clear existing keyframes if enabled
             if settings.clear_existing_keyframes:
                 self.clear_keyframes(context)
 
-            # Insert keyframes
-            self.insert_keyframes(context)
+            temp_dir = Path(bpy.app.tempdir)
+            keyframe_data_path = temp_dir / "keyframe_data.json"
+            print(keyframe_data_path)
 
-            wm = context.window_manager
-            wm.event_timer_remove(self.timer)
+            if not os.path.exists(keyframe_data_path):
+                settings.is_generating = False
+                self.report({'ERROR'}, "Keyframe file not generated (subprocess failed)")
+                return {'CANCELLED'}
+
+            # Load keyframe_data.json to keyframe data dictionary
+            with open(keyframe_data_path, 'r') as f:
+                keyframe_data_dict = json.load(f)
+
+            # Create dictionary of viseme-pose asset mappings
+            self.viseme_lookup = {}
+            for item in settings.viseme_mappings:
+                self.viseme_lookup[item.viseme_name] = item.pose_asset
+
+            # Initialize instance variables 
+            self.keyframes = keyframe_data_dict["keyframes"]
+            self.num_keyframes = len(self.keyframes)
+            self.last_keyframe_index = self.num_keyframes-1
+
+            self.inserting_keyframes = True
+            self.current_keyframe = 0
+
+            return {'RUNNING_MODAL'}
+
+        # STEP 3: Insert keyframes in batches based on keyframe_data.json
+        if self.inserting_keyframes:
+            settings.progress_message = "Inserting keyframes..."
+
+            for _ in range(BATCH_SIZE):
+                if self.current_keyframe >= self.num_keyframes:
+                    break
+ 
+                self.insert_one_keyframe(context, self.current_keyframe)
+                self.current_keyframe += 1
+
+            settings.progress = SUBPROCESS_WEIGHT + self.current_keyframe / self.num_keyframes * (1.0 - SUBPROCESS_WEIGHT)
+
+            for area in context.screen.areas:
+                area.tag_redraw()
+
+            # Continue inserting keyframes if not at the end
+            if self.current_keyframe < self.num_keyframes:
+                return {'RUNNING_MODAL'}
 
             settings.progress = 1.0
             for area in context.screen.areas:
                 area.tag_redraw()
             
+            wm.event_timer_remove(self.timer)
             settings.is_generating = False
+            settings.progress_message = "Initializing variables..."
 
             self.report(
                 {'INFO'}, 
-                f"Lip sync generated in Action '{action.name}'"
+                f"Lip sync generated in Action '{self.action.name}'"
             )
+
+            settings.detected_transcript = " ".join(self.text)
 
             return {'FINISHED'}
         

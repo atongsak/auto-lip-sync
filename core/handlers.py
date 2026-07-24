@@ -15,5 +15,4 @@ def initialize_viseme_data(dummy):
 
 @persistent
 def refresh_on_load(dummy):
-    for scene in bpy.data.scenes:
-        refresh_dependency_state(scene)
+    refresh_dependency_state()

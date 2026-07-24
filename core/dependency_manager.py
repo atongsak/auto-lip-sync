@@ -2,19 +2,20 @@ import bpy
 import subprocess
 import sys
 import threading
+import shutil
 from ..core import runtime_state
 
 # Updates SetupSettings based on dependency check
 def apply_result(installed):
-    scene = bpy.context.scene
+    setup = bpy.context.window_manager.setup
+    setup.ffmpeg_installed = installed["ffmpeg"]
+    setup.cpu_installed = installed["cpu"]
+    # Keep refreshing if FFmpeg or CPU dependencies aren't installed
+    setup.needs_refresh = not installed["ffmpeg"] or not installed["cpu"]
 
-    if not scene:
-        return None
+    print("Updating SetupSettings...")
     
-    setup = scene.setup
-    setup.cpu_installed = installed
-    setup.needs_refresh = not installed
-
+    print("FFmpeg Installed: ", setup.ffmpeg_installed)
     print("CPU Installed: ", setup.cpu_installed)
     print("Needs refresh: ", setup.needs_refresh)
 
@@ -32,13 +33,16 @@ def apply_error():
 
 def check_deps_thread():
     try:
+        installed = {}
+
+        # Check if FFmpeg is installed on the user's machine
+        installed["ffmpeg"] = shutil.which("ffmpeg")
+
+        # Check needed dependencies in site-packages
         result = subprocess.check_output(
             [sys.executable, "-m", "pip", "list"],
             stderr=subprocess.DEVNULL
         ).decode("utf-8").lower()
-
-        print("Python:", sys.executable)
-        print(result)
 
         cpu_required = [
             "whisperx", 
@@ -48,8 +52,8 @@ def check_deps_thread():
             "huggingface_hub",
             "py-espeak-ng"
         ]
-
-        installed = all(pkg in result for pkg in cpu_required)
+        
+        installed["cpu"] = all(pkg in result for pkg in cpu_required)
 
         for pkg in cpu_required:
             found = pkg in result.lower()
@@ -58,12 +62,15 @@ def check_deps_thread():
         bpy.app.timers.register(lambda: apply_result(installed))
 
     except Exception as e:
+        print(f"An error occurred: {e}")
         bpy.app.timers.register(apply_error)
 
     finally:
         runtime_state.CHECK_RUNNING = False
 
-def refresh_dependency_state(scene):
+def refresh_dependency_state():
+    setup = bpy.context.window_manager.setup
+
     if runtime_state.CHECK_RUNNING:
         return
     
@@ -71,8 +78,9 @@ def refresh_dependency_state(scene):
 
     print("Refreshing dependency state...")
 
-    print("CPU Installed: ", scene.setup.cpu_installed)
-    print("Needs refresh: ", scene.setup.needs_refresh)
+    print("FFmpeg Installed: ", setup.ffmpeg_installed)
+    print("CPU Installed: ", setup.cpu_installed)
+    print("Needs refresh: ", setup.needs_refresh)
 
     threading.Thread(
         target=check_deps_thread,
