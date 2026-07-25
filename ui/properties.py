@@ -314,7 +314,7 @@ class SetupSettings(bpy.types.PropertyGroup):
         default="CPU_Install"
     )
 
-    ffmpeg_installed = bpy.props.BoolProperty(
+    ffmpeg_installed: bpy.props.BoolProperty(
         name="FFmpeg Installed",
         default=False
     )

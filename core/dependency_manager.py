@@ -3,15 +3,25 @@ import subprocess
 import sys
 import threading
 import shutil
+import traceback
 from ..core import runtime_state
 
 # Updates SetupSettings based on dependency check
 def apply_result(installed):
+    print("apply result")
+    print("installed =", installed)
+
     setup = bpy.context.window_manager.setup
-    setup.ffmpeg_installed = installed["ffmpeg"]
+  
+    setup.ffmpeg_installed = installed["ffmpeg"] is not None
+    print("after ffmpeg:", setup.ffmpeg_installed)
+
     setup.cpu_installed = installed["cpu"]
+    print("after cpu:", setup.cpu_installed)
+
     # Keep refreshing if FFmpeg or CPU dependencies aren't installed
-    setup.needs_refresh = not installed["ffmpeg"] or not installed["cpu"]
+    setup.needs_refresh = (not setup.ffmpeg_installed or not setup.cpu_installed)
+    print("after refresh:", setup.needs_refresh)
 
     print("Updating SetupSettings...")
     
@@ -19,19 +29,27 @@ def apply_result(installed):
     print("CPU Installed: ", setup.cpu_installed)
     print("Needs refresh: ", setup.needs_refresh)
 
+    runtime_state.CHECK_RUNNING = False
     return None
 
+# TODO: Do I really need this
 def apply_error():
-    scene = bpy.context.scene
+    wm = bpy.context.window_manager
 
-    if not scene:
+    if not wm:
         return None
 
-    scene.setup.cpu_installed = False
-    scene.setup.needs_refresh = False
+    wm.setup.cpu_installed = False
+    wm.setup.needs_refresh = False
+    return None
+
+def finish(installed):
+    print("Timer executing")
+    apply_result(installed)
     return None
 
 def check_deps_thread():
+    print("thread started")
     try:
         installed = {}
 
@@ -54,33 +72,26 @@ def check_deps_thread():
         ]
         
         installed["cpu"] = all(pkg in result for pkg in cpu_required)
-
-        for pkg in cpu_required:
-            found = pkg in result.lower()
-            print(pkg, found)
         
-        bpy.app.timers.register(lambda: apply_result(installed))
+        bpy.app.timers.register(lambda: finish(installed))
 
     except Exception as e:
         print(f"An error occurred: {e}")
-        bpy.app.timers.register(apply_error)
-
-    finally:
-        runtime_state.CHECK_RUNNING = False
+        traceback.print_exc()
 
 def refresh_dependency_state():
-    setup = bpy.context.window_manager.setup
+    print("refresh dep state")
 
     if runtime_state.CHECK_RUNNING:
         return
     
     runtime_state.CHECK_RUNNING = True
 
-    print("Refreshing dependency state...")
+    # print("Refreshing dependency state...")
 
-    print("FFmpeg Installed: ", setup.ffmpeg_installed)
-    print("CPU Installed: ", setup.cpu_installed)
-    print("Needs refresh: ", setup.needs_refresh)
+    # print("FFmpeg Installed: ", setup.ffmpeg_installed)
+    # print("CPU Installed: ", setup.cpu_installed)
+    # print("Needs refresh: ", setup.needs_refresh)
 
     threading.Thread(
         target=check_deps_thread,

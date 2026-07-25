@@ -91,7 +91,9 @@ def unregister():
         )
 
     del bpy.types.WindowManager.setup
-    del bpy.types.Scene.auto_lip_sync
+
+    if bpy.types.Scene.auto_lip_sync:
+        del bpy.types.Scene.auto_lip_sync
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

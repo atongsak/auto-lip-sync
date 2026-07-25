@@ -52,7 +52,6 @@ def main():
     file_path = args.file
     compute_mode = args.compute
 
-    # print("ARGV:", sys.argv)
     print("PARSED FILE:", file_path)
   
     # Load settings.json as dict
