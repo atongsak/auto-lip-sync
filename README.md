@@ -1,6 +1,9 @@
 # Artist-Driven Auto Lip Sync Blender Add-on
 
 ### Generating first-pass lip sync animation from audio and user-defined mouth shapes using ASR, forced alignment, and phoneme processing.
+
+>**Compatibility:** Blender **5.0+** (tested on Blender 5.0 and 5.1)
+
 Animating lip sync is a repetitive and time-consuming process in character animation. To animate dialogue, animators manually place and adjust mouth shapes by ear to match the audio.
 
 This project accelerates that workflow by combining artist-defined viseme-pose asset mappings and audio with automatic speech recognition, forced alignment, and phoneme processing to produce a usable animation pass directly inside Blender.
@@ -34,6 +37,12 @@ Instead of replacing artistic control, this tool is designed to:
 
 ## Setup
 
+### Requirements
+- Blender **5.0 or newer**
+- Windows or macOS
+- FFmpeg (all platforms)
+- espeak-ng (macOS only)
+
 ### 0. Install System Dependencies
 Before installing the add-on, install the following system dependencies for your operating system.
 
@@ -51,6 +60,9 @@ Install **FFmpeg** and **espeak-ng** using Homebrew:
 brew install espeak-ng
 brew install ffmpeg
 ```
+
+### 1. Install the Add-on
+Download the latest ZIP archive from the **Releases** page. In Blender 5.0 or later, open **Edit → Preferences → Add-ons**, click ▼ in the top-right corner, select **Install from Disk…**, and choose the downloaded ZIP file.
 
 ## Contact
 Annette Tongsak (annettetongsak@gmail.com)

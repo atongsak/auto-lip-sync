@@ -1,40 +1,33 @@
 # Artist-Driven Auto Lip Sync Blender Add-on
-A Blender add-on that does a first pass of lip sync animation given input audio.
+A Blender add-on that automates first-pass lip sync generation for pose-based character rigs using English audio.
 
-# Overview
-Thank you for your interest in contributing to this Blender add-on project! This repository contains ongoing work to connect WhisperX-based phoneme extraction with viseme mapping and Blender-based facial animation.
+## Overview
+Thank you for your interest in contributing to this Blender add-on project! The project is currently in active development, and some components are still being implemented.
 
-The project is currently in active development, and some components (such as full Blender API integration) are still being implemented.
+## Prerequisites & Local Setup
+To develop the add-on locally, you'll need Blender 5.0+, Visual Studio Code, and a few development tools.
 
-# Prerequisites & Local Setup
-**1. Clone the repository:**
+### 1. Clone the Repository
+```
+git clone https://github.com/atongsak/auto-lip-sync.git
+cd auto-lip-sync
+```
+Open the repository in Visual Studio Code.
 
-``git clone https://github.com/atongsak/auto-lip-sync.git
-cd auto-lip-sync``
+### 2. Install Visual Studio Code Tools
+For the best development experience, install the following:
+- [Blender Development](https://marketplace.visualstudio.com/items?itemName=JacquesLucke.blender-development) by Jacques Lucke - allows you to run and debug Blender add-ons directly from VS Code.
+- [fake-bpy-module](https://github.com/nutti/fake-bpy-module) - provides code completion and type hints for Blender's Python API.
 
-**2. Python Environment**
+If you're new to Blender add-on development, [this tutorial](https://youtu.be/YUytEtaVrrc?si=_HFTXqI2BWS0JTvu) by CG Python explains how to configure VS Code and use the Blender Development extension.
 
-The audio-to-phoneme extraction pipeline is currently developed and tested on my local machine.
+### 3. Install System Dependencies
+Install the required system dependencies for your operating system by following the **Setup** section in the main README.
 
-The pipeline has been verified with the following versions (if using GPU compute, using CUDA 12.8):
+### 4. Launch the Add-on
+Use the Blender Development extension to launch Blender from Visual Studio Code. The extension will install the add-on into Blender's development extensions directory, allowing you to iterate without manually packaging the add-on after every change.
 
-* `torch==2.8.0`
-* `torchvision==0.23.0`
-* `torchaudio==2.8.0`
-
-As the project matures, a stable `requirements.txt` and local development setup will be formalized.
-
-**3. Blender Setup (In Progress)**
-
-Blender API integration is currently under development.
-Testing Blender functionality requires:
-
-* Installing Blender (latest LTS recommended)
-* Running the add-on script from the Scripting workspace
-
-Full audio → phoneme → viseme → blendshape automation is still being integrated.
-
-# Running Quality Checks
+## Running Quality Checks
 At this time, there is no automated CI/CD pipeline configured. Quality is enforced through manual testing and verification prior to commits.
 
 Before committing changes, contributors must:
@@ -45,9 +38,9 @@ Before committing changes, contributors must:
 * Confirm no new dependency conflicts or warnings appear
 * Review changes for clarity and consistency
 
-# Contribution Workflow
+## Contribution Workflow
 
-## Branch Naming
+### Branch Naming
 
 Use descriptive branch names:
 
@@ -56,7 +49,7 @@ Use descriptive branch names:
 * `fix/local-whisperx-bug`
 * `docs/update-readme`
 
-## Pull Requests
+### Pull Requests
 
 All changes should be submitted through a Pull Request (PR), which should include:
 
@@ -65,7 +58,7 @@ All changes should be submitted through a Pull Request (PR), which should includ
 * A description of how it was tested
 * Screenshots or logs if relevant (especially for Blender functionality)
 
-## Code Review Expectations
+### Code Review Expectations
 
 All PRs must be reviewed before merging.
 
@@ -79,7 +72,7 @@ As the primary contributor, the project maintainer performs a structured self-re
 
 If external contributors are added in the future, at least one approving review will be required before merging into the main branch.
 
-## Definition of Done (DoD)
+### Definition of Done (DoD)
 
 A contribution is considered complete when:
 
@@ -88,7 +81,7 @@ A contribution is considered complete when:
 * Manual testing has been performed
 * Documentation or notes have been updated if necessary
 
-# Reporting Bugs / Requesting Changes
+## Reporting Bugs / Requesting Changes
 
 Please open a GitHub Issue for:
 
@@ -103,7 +96,7 @@ Include:
 * Expected vs. actual behavior
 * Screenshots or error logs
 
-# Where to Ask for Help
+## Where to Ask for Help
 
 For questions about the project:
 
