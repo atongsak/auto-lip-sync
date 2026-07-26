@@ -13,7 +13,7 @@ class AutoLipSyncPanel(bpy.types.Panel):
         layout = self.layout
 
         # Alert if no target channel
-        if settings.target_channel == ("None" or ""):
+        if settings.target_channel == "None" or settings.target_channel == "":
             box = layout.box()
             box.label(
                 text="No unmuted audio channel selected",
@@ -168,7 +168,7 @@ class GenerateKeyframesSubPanel(bpy.types.Panel):
         if invalid_choose_action or invalid_open_action:
             valid_target_action = False
 
-        if settings.viseme_mappings_valid() and settings.target_channel != ("None" and "") and valid_target_action:
+        if settings.viseme_mappings_valid() and settings.target_channel != "None" and settings.target_channel != "" and valid_target_action:
             if settings.is_generating:
                 layout.prop(settings, "progress", text=settings.progress_message, slider=False)
                 

@@ -14,40 +14,30 @@ def apply_result(installed):
     setup = bpy.context.window_manager.setup
   
     setup.ffmpeg_installed = installed["ffmpeg"] is not None
-    print("after ffmpeg:", setup.ffmpeg_installed)
-
     setup.cpu_installed = installed["cpu"]
-    print("after cpu:", setup.cpu_installed)
 
     # Keep refreshing if FFmpeg or CPU dependencies aren't installed
-    setup.needs_refresh = (not setup.ffmpeg_installed or not setup.cpu_installed)
-    print("after refresh:", setup.needs_refresh)
+    if not setup.ffmpeg_installed or not setup.cpu_installed:
+        bpy.app.timers.register(refresh_dependency_state, first_interval=2.0)
 
     print("Updating SetupSettings...")
-    
     print("FFmpeg Installed: ", setup.ffmpeg_installed)
     print("CPU Installed: ", setup.cpu_installed)
-    print("Needs refresh: ", setup.needs_refresh)
 
     runtime_state.CHECK_RUNNING = False
     return None
 
-# TODO: Do I really need this
+# Handles case where checking dependencies fails
 def apply_error():
-    wm = bpy.context.window_manager
+    runtime_state.CHECK_RUNNING = False
 
+    wm = bpy.context.window_manager
     if not wm:
         return None
-
-    wm.setup.cpu_installed = False
-    wm.setup.needs_refresh = False
+    
     return None
 
-def finish(installed):
-    print("Timer executing")
-    apply_result(installed)
-    return None
-
+# Checks for required FFmpeg and CPU dependencies
 def check_deps_thread():
     print("thread started")
     try:
@@ -72,26 +62,25 @@ def check_deps_thread():
         ]
         
         installed["cpu"] = all(pkg in result for pkg in cpu_required)
-        
-        bpy.app.timers.register(lambda: finish(installed))
+
+        # Register apply_result so Blender later calls it to update SetupSettings
+        bpy.app.timers.register(lambda: apply_result(installed))
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        apply_error()
         traceback.print_exc()
 
+# Executes thread to update dependencies state
 def refresh_dependency_state():
     print("refresh dep state")
+    print("check running ", runtime_state.CHECK_RUNNING)
 
     if runtime_state.CHECK_RUNNING:
+        print("returning")
         return
     
     runtime_state.CHECK_RUNNING = True
-
-    # print("Refreshing dependency state...")
-
-    # print("FFmpeg Installed: ", setup.ffmpeg_installed)
-    # print("CPU Installed: ", setup.cpu_installed)
-    # print("Needs refresh: ", setup.needs_refresh)
 
     threading.Thread(
         target=check_deps_thread,

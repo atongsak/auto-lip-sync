@@ -1,6 +1,7 @@
 import bpy
 from bpy.app.handlers import persistent
 from .dependency_manager import refresh_dependency_state
+from ..core import runtime_state
 
 @persistent
 def initialize_viseme_data(dummy):
@@ -15,4 +16,5 @@ def initialize_viseme_data(dummy):
 
 @persistent
 def refresh_on_load(dummy):
+    runtime_state.CHECK_RUNNING = False
     refresh_dependency_state()
