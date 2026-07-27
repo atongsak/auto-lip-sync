@@ -7,25 +7,35 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-import whisperx
+from pathlib import Path
+import sys
+import platform
+import shutil
+
+addon_root = Path(__file__).parent.parent
+python_packages = addon_root / "python_packages"
+
+if python_packages.exists():
+    sys.path.insert(0, str(python_packages))
+
 import numpy as np
-from phonemizer import phonemize
 import pipeline_functions
 from viseme_sets import SET_MAPPING_DICT
 import json
 import os
-import sys
 import argparse
-import shutil
 
 def init_espeak():
-    import platform
-    from pathlib import Path
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
 
     if platform.system() == "Windows":
         addon_root = Path(__file__).parent.parent
         dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
+
+        # print("Using espeak DLL:", dll_path)
+
+        # if not dll_path.exists():
+        #     raise FileExistsError(dll_path)
         EspeakWrapper.set_library(str(dll_path))
 
     elif platform.system() == "Darwin":
@@ -46,6 +56,9 @@ def parse_args():
     return parser.parse_known_args(sys.argv[sys.argv.index("--") + 1:])[0]
 
 def main():
+    import whisperx
+    from phonemizer import phonemize
+
     settings_dict = {}
     args = parse_args()
 

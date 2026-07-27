@@ -28,6 +28,16 @@ from .operators.install_dependencies import InstallDependenciesOperator
 from .core.handlers import initialize_viseme_data, refresh_on_load
 from .core.dependency_manager import refresh_dependency_state
 
+from pathlib import Path
+import sys
+
+# Add python packages to sys.path
+python_packages = Path(__file__).parent / "python_packages"
+if python_packages.exists():
+    sys.path.insert(0, str(python_packages))
+
+print("In sys.path:", str(python_packages) in sys.path)
+
 EspeakWrapper = None
 
 classes = (

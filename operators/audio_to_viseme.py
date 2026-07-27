@@ -62,7 +62,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
         print(addon_root)
         
         # Execute audio-to-keyframes pipeline
-        command = [sys.executable, "-u", str(pipeline_script), "--", "--file", str(settings_path), "--compute", settings.compute]
+        command = [sys.executable, "-u", "-Xutf8", str(pipeline_script), "--", "--file", str(settings_path), "--compute", settings.compute]
 
         self.process = subprocess.Popen(
             command,

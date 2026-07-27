@@ -15,14 +15,28 @@ class InstallDependenciesOperator(bpy.types.Operator):
         addon_root = Path(__file__).parent.parent
         requirements_path = addon_root / "requirements" / "cpu_requirements.txt"
 
-        python_exe = sys.executable
+        # Add-on owned package dir
+        python_packages = addon_root / "python_packages"
+        python_packages.mkdir(exist_ok=True)
 
-        command = [python_exe, "-m", "pip", "install", "-r", str(requirements_path)]
+        print("Installing packages to: ", python_packages)
+
+        command = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--target",
+            str(python_packages),
+            "-r",
+            str(requirements_path)
+        ]
+
+        print("Command: ", command)
 
         setup.installing = True
         setup.install_log = "Starting installation..."
 
-        # Installs into Blender's bundled Python environment
         runtime_state.INSTALL_PROCESS = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
@@ -30,8 +44,6 @@ class InstallDependenciesOperator(bpy.types.Operator):
             text=True,
             bufsize=1
         )
-
-        runtime_state.INSTALL_SCENE = context.scene
 
         bpy.app.timers.register(monitor_install)
 

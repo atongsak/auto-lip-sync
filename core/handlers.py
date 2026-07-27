@@ -16,5 +16,8 @@ def initialize_viseme_data(dummy):
 
 @persistent
 def refresh_on_load(dummy):
+    setup = bpy.context.window_manager.setup
+    setup.ffmpeg_installed = False
+    setup.cpu_installed = False
     runtime_state.CHECK_RUNNING = False
     refresh_dependency_state()
