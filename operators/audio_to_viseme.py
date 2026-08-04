@@ -12,7 +12,7 @@ from ..core.visemes import get_mapped_visemes
 from ..core.audio import get_target_audio_path
 
 class AudioToVisemeOperator(bpy.types.Operator): 
-    bl_idname = "wm.run_subprocess"
+    bl_idname = "auto_lip_sync.generate"
     bl_label = "Function that runs the audio-to-viseme process"   
     bl_description = "Generate and insert lip sync keyframes into the target action"  
             
@@ -264,7 +264,6 @@ class AudioToVisemeOperator(bpy.types.Operator):
                         self.status = line.removeprefix("STATUS:").strip()
                         print(f"STATUS SET TO: {repr(self.status)}")
                     elif line.startswith("TEXT"):
-                        # self.text += line.removeprefix("TEXT:").strip()
                         self.text.append(line.removeprefix("TEXT:").strip())
                         print(line.strip())
             except queue.Empty:

@@ -27,16 +27,17 @@ from .operators.audio_to_viseme import AudioToVisemeOperator
 from .operators.install_dependencies import InstallDependenciesOperator
 from .core.handlers import initialize_viseme_data, refresh_on_load
 from .core.dependency_manager import refresh_dependency_state
+from .core.install_monitor import monitor_install
 
 from pathlib import Path
 import sys
 
-# Add python packages to sys.path
-python_packages = Path(__file__).parent / "python_packages"
-if python_packages.exists():
-    sys.path.insert(0, str(python_packages))
+# Add Python dependencies to sys.path
+dependencies = Path(__file__).parent / "dependencies"
+if dependencies.exists():
+    sys.path.insert(0, str(dependencies))
 
-print("In sys.path:", str(python_packages) in sys.path)
+print("In sys.path:", str(dependencies) in sys.path)
 
 EspeakWrapper = None
 
@@ -57,12 +58,18 @@ classes = (
     TranscriptPanel
 )
 
+registered_classes = []
+
 def register():
-    for cls in classes: 
+    # for cls in classes: 
+    #     bpy.utils.register_class(cls)
+
+    for cls in classes:
         try:
             bpy.utils.register_class(cls)
-        except ValueError:
-            pass
+            registered_classes.append(cls)
+        except Exception as e:
+            print(f"Failed to register {cls.__name__}: {e}")
 
     # Global properties
     bpy.types.WindowManager.setup = bpy.props.PointerProperty(
@@ -84,12 +91,22 @@ def register():
             refresh_on_load
         )
 
-    bpy.app.timers.register(
-        refresh_dependency_state,
-        first_interval=1.0
-    )
+    if not bpy.app.timers.is_registered(refresh_dependency_state):
+        bpy.app.timers.register(
+            refresh_dependency_state,
+            first_interval=0.5
+        )
+
         
 def unregister():
+    # Unregister timers
+    if bpy.app.timers.is_registered(refresh_dependency_state):
+        bpy.app.timers.unregister(refresh_dependency_state)
+
+    if bpy.app.timers.is_registered(monitor_install):
+        bpy.app.timers.unregister(monitor_install)
+
+    # Remove handlers
     if refresh_on_load in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(
             refresh_on_load
@@ -100,10 +117,18 @@ def unregister():
             initialize_viseme_data
         )
 
-    del bpy.types.WindowManager.setup
+    # Delete PointerProperties before unregistering classes
+    if hasattr(bpy.types.WindowManager, "setup"):
+        del bpy.types.WindowManager.setup
 
-    if bpy.types.Scene.auto_lip_sync:
+    if hasattr(bpy.types.Scene, "auto_lip_sync"):
         del bpy.types.Scene.auto_lip_sync
 
+    # Unregister classes in reverse order
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except Exception as e:
+            print(f"Failed to unregister {cls.__name__}: {e}")
+
+    registered_classes.clear()

@@ -12,11 +12,12 @@ import sys
 import platform
 import shutil
 
+# Add Python dependencies to sys.path
 addon_root = Path(__file__).parent.parent
-python_packages = addon_root / "python_packages"
+dependencies = addon_root / "dependencies"
 
-if python_packages.exists():
-    sys.path.insert(0, str(python_packages))
+if dependencies.exists():
+    sys.path.insert(0, str(dependencies))
 
 import numpy as np
 import pipeline_functions

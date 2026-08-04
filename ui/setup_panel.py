@@ -1,4 +1,5 @@
 import bpy
+from ..operators.install_dependencies import InstallDependenciesOperator
 
 class SetupPanel(bpy.types.Panel):
     bl_idname = "VIEW3D_PT_setup"
@@ -40,4 +41,4 @@ class SetupPanel(bpy.types.Panel):
 
         if not setup.installing:
             if setup.installations == "CPU_Install" and needs_cpu:
-                layout.operator("als.install_dependencies", icon="IMPORT")
+                layout.operator(InstallDependenciesOperator.bl_idname, icon="IMPORT")

@@ -6,7 +6,7 @@ from ..core.install_monitor import monitor_install
 from ..core import runtime_state
 
 class InstallDependenciesOperator(bpy.types.Operator):
-    bl_idname = "als.install_dependencies"
+    bl_idname = "setup.install_dependencies"
     bl_label = "Install Dependencies"
 
     def execute(self, context):
@@ -16,10 +16,10 @@ class InstallDependenciesOperator(bpy.types.Operator):
         requirements_path = addon_root / "requirements" / "cpu_requirements.txt"
 
         # Add-on owned package dir
-        python_packages = addon_root / "python_packages"
-        python_packages.mkdir(exist_ok=True)
+        dependencies = addon_root / "dependencies"
+        dependencies.mkdir(exist_ok=True)
 
-        print("Installing packages to: ", python_packages)
+        print("Installing packages to: ", dependencies)
 
         command = [
             sys.executable,
@@ -27,7 +27,7 @@ class InstallDependenciesOperator(bpy.types.Operator):
             "pip",
             "install",
             "--target",
-            str(python_packages),
+            str(dependencies),
             "-r",
             str(requirements_path)
         ]
