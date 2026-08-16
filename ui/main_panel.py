@@ -134,9 +134,9 @@ class AnimationSettingsSubPanel(bpy.types.Panel):
         model_picker.label(text="ASR Model Size")
         model_picker.prop(settings, "model_size")
 
-        venv_picker = layout.row()
-        venv_picker.label(text="Compute")
-        venv_picker.prop(settings, "compute")
+        # compute_picker = layout.row()
+        # compute_picker.label(text="Compute")
+        # compute_picker.prop(settings, "compute")
         
         clear_existing_toggle = layout.row()
         clear_existing_toggle.label(text="Clear existing keyframes")

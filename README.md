@@ -1,6 +1,6 @@
 # Artist-Driven Auto Lip Sync Blender Add-on
 
-### Generating first-pass lip sync animation from audio and user-defined mouth shapes using ASR, forced alignment, and phoneme processing.
+### Generating first-pass lip sync animation from audio and user-defined mouth shapes using automatic speech recognition, forced alignment, and phoneme processing.
 
 >**Compatibility:** Blender **5.0+** (tested on Blender 5.0 and 5.1)
 
@@ -17,23 +17,23 @@ Instead of replacing artistic control, this tool is designed to:
 ## Key Features
 
 ### Animation
-- 🎤 Generate lip sync animation from English dialogue (<25 MB audio)
-- 🎞️ Automatically insert viseme keyframes into Blender's timeline
-- 🧹 Clear existing lip sync keyframes before generating a new pass
-- 😐 Automatically close the mouth after a configurable number of frames
+- Generate lip sync animation from English dialogue (<25 MB audio)
+- Automatically insert viseme keyframes into Blender's timeline
+- Clear existing lip sync keyframes before generating a new pass
+- Automatically close the mouth after a configurable number of frames
 
 ### Rig Support
-- 🎭 Map visemes to custom pose assets for any pose-based facial rig
-- 😀 Supports both 22-viseme and 15-viseme workflows
+- Map visemes to custom pose assets for any pose-based facial rig
+- Supports both 22-viseme and 15-viseme workflows
 
 ### Workflow
-- 📝 View the detected transcript when reviewing generated animation
-- ⚙️ Built-in CPU dependency installer
+- View the detected transcript when reviewing generated animation
+- FFmpeg and CPU dependency checker
 
 ## Planned Features
-- 🚀 GPU acceleration for faster processing
-- 🔊 Volume-based jaw amplitude controls
-- 🖼️ Support for 2D animation image-plane reference workflows
+- GPU acceleration for faster processing
+- Volume-based jaw amplitude controls
+- Support for 2D animation image-plane reference workflows
 
 ## Setup
 
@@ -41,7 +41,7 @@ Instead of replacing artistic control, this tool is designed to:
 - Blender **5.0 or newer**
 - Windows or macOS
 - FFmpeg (all platforms)
-- espeak-ng (macOS only)
+- eSpeak NG (macOS only)
 
 ### 0. Install System Dependencies
 Before installing the add-on, install the following system dependencies for your operating system.
@@ -55,7 +55,7 @@ winget install -e --id Gyan.FFmpeg
 - Alternative: Download and install FFmpeg manually from the official [FFmpeg Downloads](https://ffmpeg.org/download.html) page.
 
 #### Mac
-Install **FFmpeg** and **espeak-ng** using Homebrew:
+Install **FFmpeg** and **eSpeak-NG** using Homebrew:
 ```
 brew install espeak-ng
 brew install ffmpeg
@@ -72,4 +72,4 @@ For issues or feedback, please open a GitHub issue.
 ## Acknowledgements
 This work utilizes [WhisperX](https://github.com/m-bain/whisperX) for audio transcription and [Wav2Vec2-Large-960h-Lv60](https://huggingface.co/facebook/wav2vec2-large-960h-lv60) for forced alignment. 
 
-[Phonemizer](https://github.com/bootphon/phonemizer) with [espeak-ng backend](https://github.com/espeak-ng/espeak-ng) is used to convert detected transcripts to IPA phonemes.
+[Phonemizer](https://github.com/bootphon/phonemizer) with [eSpeak NG backend](https://github.com/espeak-ng/espeak-ng) is used to convert detected transcripts to IPA phonemes.
