@@ -24,7 +24,10 @@ def init_espeak():
     if platform.system() == "Windows":
         addon_root = Path(__file__).parent.parent
         dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
+        print("dll_path:", dll_path)
+        print("EXISTS:", dll_path.exists())
         EspeakWrapper.set_library(str(dll_path))
+        print("LIBRARY:", EspeakWrapper.library())
 
     elif platform.system() == "Darwin":
         espeak = shutil.which("espeak-ng")

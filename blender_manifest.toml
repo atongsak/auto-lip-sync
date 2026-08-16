@@ -65,7 +65,7 @@ wheels = [
   "./wheels/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
   "./wheels/regex-2026.7.19-cp313-cp313-win_amd64.whl",
   "./wheels/pyyaml-6.0.3-cp313-cp313-win_amd64.whl",
-  "./wheels/numpy-2.5.2-cp313-cp313-win_amd64.whl",
+  
   "./wheels/tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
   "./wheels/hf_xet-1.6.0-cp38-abi3-win_amd64.whl"
 ]
