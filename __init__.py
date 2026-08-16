@@ -33,11 +33,11 @@ from pathlib import Path
 import sys
 
 # Add Python dependencies to sys.path
-dependencies = Path(__file__).parent / "dependencies"
-if dependencies.exists():
-    sys.path.insert(0, str(dependencies))
+# dependencies = Path(__file__).parent / "dependencies"
+# if dependencies.exists():
+#     sys.path.insert(0, str(dependencies))
 
-print("In sys.path:", str(dependencies) in sys.path)
+# print("In sys.path:", str(dependencies) in sys.path)
 
 EspeakWrapper = None
 
