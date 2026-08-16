@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 id = "auto_lip_sync"
 version = "1.0.0"
 name = "Auto Lip Sync"
-tagline = "A Blender add-on that generates lip sync animation keyframes from audio and viseme-mouth pose mappings"
+tagline = "Generates lip sync for pose-based rigs using English audio"
 maintainer = "Annette Tongsak"
 type = "add-on"
 
@@ -60,7 +60,14 @@ wheels = [
   "./wheels/httpcore-1.0.9-py3-none-any.whl",
   "./wheels/httpx-0.28.1-py3-none-any.whl",
   "./wheels/click-8.4.2-py3-none-any.whl",
-  "./wheels/huggingface_hub-1.27.0-py3-none-any.whl"
+  "./wheels/huggingface_hub-1.27.0-py3-none-any.whl",
+  "./wheels/charset_normalizer-3.5.1-cp313-cp313-win_amd64.whl",
+  "./wheels/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
+  "./wheels/regex-2026.7.19-cp313-cp313-win_amd64.whl",
+  "./wheels/pyyaml-6.0.3-cp313-cp313-win_amd64.whl",
+  "./wheels/numpy-2.5.2-cp313-cp313-win_amd64.whl",
+  "./wheels/tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
+  "./wheels/hf_xet-1.6.0-cp38-abi3-win_amd64.whl"
 ]
 
 # # Optional: add-ons can list which resources they will require:
