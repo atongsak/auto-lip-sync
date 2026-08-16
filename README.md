@@ -48,14 +48,14 @@ Before installing the add-on, install the following system dependencies for your
 
 #### Windows
 Install **FFmpeg** using one of the following methods:
-- **Recommended**: Open Command Prompt or PowerShell and run:
+- **Recommended**: Open PowerShell as an Administrator and run:
 ```
-winget install -e --id Gyan.FFmpeg
+choco install ffmpeg
 ```
 - Alternative: Download and install FFmpeg manually from the official [FFmpeg Downloads](https://ffmpeg.org/download.html) page.
 
 #### Mac
-Install **FFmpeg** and **eSpeak-NG** using Homebrew:
+Install **FFmpeg** and **eSpeak NG** using Homebrew:
 ```
 brew install espeak-ng
 brew install ffmpeg
