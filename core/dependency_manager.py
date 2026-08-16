@@ -7,8 +7,8 @@ from ..core import runtime_state
 
 # Updates SetupSettings based on dependency check
 def apply_result(installed):
-    # print("apply result")
-    # print("installed =", installed)
+    print("apply result")
+    print("installed =", installed)
 
     setup = bpy.context.window_manager.setup
   
@@ -19,9 +19,9 @@ def apply_result(installed):
     if not setup.ffmpeg_installed or not setup.cpu_installed:
         bpy.app.timers.register(refresh_dependency_state, first_interval=1.0)
 
-    # print("Updating SetupSettings...")
-    # print("FFmpeg Installed: ", setup.ffmpeg_installed)
-    # print("CPU Installed: ", setup.cpu_installed)
+    print("Updating SetupSettings...")
+    print("FFmpeg Installed: ", setup.ffmpeg_installed)
+    print("CPU Installed: ", setup.cpu_installed)
 
     runtime_state.CHECK_RUNNING = False
     return None
@@ -38,10 +38,7 @@ def apply_error():
 
 # Checks for required FFmpeg and CPU dependencies
 def check_deps_thread():
-    # print("thread started")
-
     try:
-        # print("in try")
         installed = {}
 
         # Check if FFmpeg is installed on the user's machine
@@ -71,10 +68,7 @@ def check_deps_thread():
 
 # Executes thread to update dependencies state
 def refresh_dependency_state():
-    # print("refresh dep state")
-    # print(sys.path)
     if runtime_state.CHECK_RUNNING:
-        # print("returning")
         return
     
     runtime_state.CHECK_RUNNING = True

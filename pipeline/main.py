@@ -11,14 +11,6 @@ from pathlib import Path
 import sys
 import platform
 import shutil
-
-# Add Python dependencies to sys.path
-# addon_root = Path(__file__).parent.parent
-# dependencies = addon_root / "dependencies"
-
-# if dependencies.exists():
-#     sys.path.insert(0, str(dependencies))
-
 import numpy as np
 import pipeline_functions
 from viseme_sets import SET_MAPPING_DICT

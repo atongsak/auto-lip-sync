@@ -24,20 +24,8 @@ from .ui.properties import VisemeItem, VisemeSetMappingGroup, AutoLipSyncSetting
 from .ui.setup_panel import SetupPanel
 from .ui.transcript_panel import TranscriptPanel
 from .operators.audio_to_viseme import AudioToVisemeOperator
-from .operators.install_dependencies import InstallDependenciesOperator
 from .core.handlers import initialize_viseme_data, refresh_on_load
 from .core.dependency_manager import refresh_dependency_state
-from .core.install_monitor import monitor_install
-
-from pathlib import Path
-import sys
-
-# Add Python dependencies to sys.path
-# dependencies = Path(__file__).parent / "dependencies"
-# if dependencies.exists():
-#     sys.path.insert(0, str(dependencies))
-
-# print("In sys.path:", str(dependencies) in sys.path)
 
 EspeakWrapper = None
 
@@ -48,7 +36,6 @@ classes = (
     SetupSettings,
 
     AudioToVisemeOperator,
-    InstallDependenciesOperator,
     
     SetupPanel,
     AutoLipSyncPanel,
@@ -61,9 +48,6 @@ classes = (
 registered_classes = []
 
 def register():
-    # for cls in classes: 
-    #     bpy.utils.register_class(cls)
-
     for cls in classes:
         try:
             bpy.utils.register_class(cls)
@@ -97,14 +81,10 @@ def register():
             first_interval=0.5
         )
 
-        
 def unregister():
     # Unregister timers
     if bpy.app.timers.is_registered(refresh_dependency_state):
         bpy.app.timers.unregister(refresh_dependency_state)
-
-    if bpy.app.timers.is_registered(monitor_install):
-        bpy.app.timers.unregister(monitor_install)
 
     # Remove handlers
     if refresh_on_load in bpy.app.handlers.load_post:

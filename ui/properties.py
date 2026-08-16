@@ -304,16 +304,6 @@ class AutoLipSyncSettings(bpy.types.PropertyGroup):
 
 
 class SetupSettings(bpy.types.PropertyGroup):
-    INSTALLATION_OPTIONS = [
-        ("CPU_Install", "CPU Dependencies", "CPU Dependencies")
-    ]
-
-    installations: bpy.props.EnumProperty(
-        name="",
-        items=INSTALLATION_OPTIONS,
-        default="CPU_Install"
-    )
-
     ffmpeg_installed: bpy.props.BoolProperty(
         name="FFmpeg Installed",
         default=False
@@ -322,13 +312,4 @@ class SetupSettings(bpy.types.PropertyGroup):
     cpu_installed: bpy.props.BoolProperty(
         name="CPU Installed",
         default=False
-    )
-
-    needs_refresh: bpy.props.BoolProperty(default=True)
-
-    installing: bpy.props.BoolProperty(default=False)
-
-    install_log: bpy.props.StringProperty(
-        name="Install Status",
-        default=""
     )
