@@ -25,7 +25,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
         
         mapped_visemes_dict = get_mapped_visemes(context)
         target_audio_path = get_target_audio_path(context)
-        
+       
         # Check file size of target channel audio wav
         file_size = os.path.getsize(target_audio_path)
         limit_bytes = 25 * 1024 * 1024 # Whisper can handle files <25 MB

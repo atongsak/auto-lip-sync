@@ -30,14 +30,20 @@ def init_espeak():
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
 
     if platform.system() == "Windows":
-        addon_root = Path(__file__).parent.parent
-        dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
+        espeak = shutil.which("espeak-ng")
+        if espeak is None:
+            raise RuntimeError(
+                "espeak-ng was not found. Please install it and restart Blender."
+            )
+        EspeakWrapper.set_library(espeak)
+        # addon_root = Path(__file__).parent.parent
+        # dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
 
-        # print("Using espeak DLL:", dll_path)
+        # # print("Using espeak DLL:", dll_path)
 
-        # if not dll_path.exists():
-        #     raise FileExistsError(dll_path)
-        EspeakWrapper.set_library(str(dll_path))
+        # # if not dll_path.exists():
+        # #     raise FileExistsError(dll_path)
+        # EspeakWrapper.set_library(str(dll_path))
 
     elif platform.system() == "Darwin":
         espeak = shutil.which("espeak-ng")

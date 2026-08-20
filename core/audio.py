@@ -1,5 +1,6 @@
 import bpy
 import os
+import time
 
 # Returns file path to created target channel audio wav 
 def get_target_audio_path(context):
@@ -19,6 +20,10 @@ def get_target_audio_path(context):
     
         output_path = os.path.join(bpy.app.tempdir, "target_audio.wav")
 
+        # Remove an old file so we don't detect it as the new WAV
+        if os.path.exists(output_path):
+            os.remove(output_path)
+
         # Create wav of rendered audio in target channel
         bpy.ops.sound.mixdown(
             filepath=output_path,
@@ -26,6 +31,17 @@ def get_target_audio_path(context):
             codec='PCM',
             format='S16'
         )
+
+        # Wait until WAV size is stable
+        last_size = -1
+
+        while True:
+            if os.path.exists(output_path):
+                size = os.path.getsize(output_path)
+                if size > 0 and size == last_size:
+                    break
+                last_size = size
+            time.sleep(0.1)
 
     finally:  
         # Revert mute states of strips in VSE

@@ -61,9 +61,6 @@ classes = (
 registered_classes = []
 
 def register():
-    # for cls in classes: 
-    #     bpy.utils.register_class(cls)
-
     for cls in classes:
         try:
             bpy.utils.register_class(cls)
