@@ -18,10 +18,6 @@ def apply_result(installed):
     if not setup.ffmpeg_installed or not setup.cpu_installed:
         bpy.app.timers.register(refresh_dependency_state, first_interval=1.0)
 
-    # print("Updating SetupSettings...")
-    # print("FFmpeg Installed: ", setup.ffmpeg_installed)
-    # print("CPU Installed: ", setup.cpu_installed)
-
     runtime_state.CHECK_RUNNING = False
     return None
 
@@ -49,7 +45,14 @@ def check_deps_thread():
             "phonemizer", 
             "tokenizers", 
             "transformers", 
-            "huggingface_hub"
+            "huggingface_hub",
+            "torch",
+            "torchaudio",
+            "ctranslate2",
+            "faster_whisper",
+            "pyannote",
+            "omegaconf",
+            "nltk"
         ]
     
         installed["cpu"] = all(

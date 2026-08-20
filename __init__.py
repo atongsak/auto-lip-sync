@@ -27,8 +27,6 @@ from .operators.audio_to_viseme import AudioToVisemeOperator
 from .core.handlers import initialize_viseme_data, refresh_on_load
 from .core.dependency_manager import refresh_dependency_state
 
-EspeakWrapper = None
-
 classes = (
     VisemeItem,
     VisemeSetMappingGroup,

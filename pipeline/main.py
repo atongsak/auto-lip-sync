@@ -41,45 +41,18 @@ import importlib.util
 
 # print("====================================\n")
 
-
-print("=== PIPELINE PYTHON ===")
-print("sys.executable:", sys.executable)
-print("sys.version:", sys.version)
-
-print("=== SYS.PATH ===")
-for p in sys.path:
-    print(p)
-
-print("=== PHONEMIZER ===")
-print("spec:", importlib.util.find_spec("phonemizer"))
-
 def init_espeak():
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
 
-    if platform.system() == "Windows":
-        espeak = shutil.which("espeak-ng")
-        if espeak is None:
-            raise RuntimeError(
-                "espeak-ng was not found. Please install it and restart Blender."
-            )
-        EspeakWrapper.set_library(espeak)
-        # addon_root = Path(__file__).parent.parent
-        # dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
+    espeak = shutil.which("espeak-ng")
 
-        # # print("Using espeak DLL:", dll_path)
-
-        # # if not dll_path.exists():
-        # #     raise FileExistsError(dll_path)
-        # EspeakWrapper.set_library(str(dll_path))
-
-    elif platform.system() == "Darwin":
-        espeak = shutil.which("espeak-ng")
-        if espeak is None:
-            raise RuntimeError(
-                "espeak-ng was not found. Please install it with Homebrew:\n"
-                "brew install espeak-ng"
-            )
-        EspeakWrapper.set_library(espeak)
+    if espeak is None:
+        print("STATUS:NO_ESPEAK", flush=True)
+        raise RuntimeError(
+            "eSpeak NG was not found. Please install it and restart Blender."
+        )
+    
+    EspeakWrapper.set_library(espeak)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -111,6 +84,7 @@ def main():
     # Initialize important lip sync variables
     viseme_mapping = SET_MAPPING_DICT[settings_dict["viseme_set"]]
     parent_dir = os.path.dirname(file_path)
+    # TODO: Implement GPU compute support
     # device = "cuda" if (compute_mode == "GPU_COMPUTE" and torch.cuda.is_available()) else "cpu"
     device = "cpu"
 
@@ -167,9 +141,6 @@ def main():
     phoneme_timings = []
     for i in range(len(result["segments"])):
         phoneme_timings.extend(result["segments"][i].get('chars')[:-1])
-
-    # for p in phoneme_timings:
-    #     print(p)
 
     # Save a viseme timing list to viseme.json
     visemes = pipeline_functions.phonemes_to_visemes(phoneme_timings, viseme_mapping, settings_dict)
