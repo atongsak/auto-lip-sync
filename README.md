@@ -18,7 +18,7 @@ Instead of replacing artistic control, this tool is designed to:
 
 ### Animation
 - Generate lip sync animation from English dialogue (<25 MB audio)
-- Automatically insert viseme keyframes into Blender's timeline
+- Insert viseme keyframes into Blender's timeline within seconds
 - Clear existing lip sync keyframes before generating a new pass
 - Automatically close the mouth after a configurable number of frames
 
@@ -41,7 +41,7 @@ Instead of replacing artistic control, this tool is designed to:
 - Blender **5.0 or newer**
 - Windows or macOS
 - FFmpeg (all platforms)
-- eSpeak NG (macOS only)
+- eSpeak NG (all platforms)
 
 ### 0. Install System Dependencies
 Before installing the add-on, install the following system dependencies for your operating system.
@@ -50,9 +50,14 @@ Before installing the add-on, install the following system dependencies for your
 Install **FFmpeg** using one of the following methods:
 - **Recommended**: Open PowerShell as an Administrator and run:
 ```
-choco install ffmpeg
+winget install -e --id Gyan.FFmpeg
 ```
 - Alternative: Download and install FFmpeg manually from the official [FFmpeg Downloads](https://ffmpeg.org/download.html) page.
+
+Install **eSpeak NG** from the official [eSpeak NG Releases](https://github.com/espeak-ng/espeak-ng/releases) page:
+1. Open the Assets section of the latest release and download `espeak-ng.msi`.
+2. Double-click the downloaded `.msi` file to launch the installer.
+3. Follow the setup wizard and click Install to complete the installation.
 
 #### Mac
 Install **FFmpeg** and **eSpeak NG** using Homebrew:
