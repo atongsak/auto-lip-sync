@@ -1,5 +1,4 @@
 import bpy
-import platform
 import shutil
 
 class SetupPanel(bpy.types.Panel):
@@ -20,14 +19,13 @@ class SetupPanel(bpy.types.Panel):
             icon=ffmpeg_icon
         )
 
-        # espeak-ng
-        if platform.system() == "Darwin":
-            espeak = shutil.which("espeak-ng")
-            layout.label(
-                text=f"eSpeak NG: {'Installed' if espeak else 'Not Installed'}",
-                icon="CHECKMARK" if espeak else "ERROR"
-            )
-        
+        # eSpeak NG
+        espeak = shutil.which("espeak-ng")
+        layout.label(
+            text=f"eSpeak NG: {'Installed' if espeak else 'Not Installed'}",
+            icon="CHECKMARK" if espeak else "ERROR"
+        )
+
         # CPU
         cpu_icon = "CHECKMARK" if setup.cpu_installed else "ERROR"
         layout.label(

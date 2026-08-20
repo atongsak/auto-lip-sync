@@ -1,4 +1,4 @@
-import torch
+# import torch
 import warnings
 
 warnings.filterwarnings(
@@ -18,16 +18,59 @@ import json
 import os
 import argparse
 
+import importlib.util
+
+# print("\n========== PIPELINE DEBUG ==========")
+# print("EXECUTABLE:", sys.executable)
+
+# for p in sys.path:
+#     print("PATH:", p)
+
+# for name in [
+#     "whisperx",
+#     "pyannote",
+#     "torch",
+#     "torchaudio",
+#     "faster_whisper",
+#     "ctranslate2",
+# ]:
+#     spec = importlib.util.find_spec(name)
+#     print(name, "=>", spec)
+#     if spec:
+#         print("    ORIGIN:", spec.origin)
+
+# print("====================================\n")
+
+
+print("=== PIPELINE PYTHON ===")
+print("sys.executable:", sys.executable)
+print("sys.version:", sys.version)
+
+print("=== SYS.PATH ===")
+for p in sys.path:
+    print(p)
+
+print("=== PHONEMIZER ===")
+print("spec:", importlib.util.find_spec("phonemizer"))
+
 def init_espeak():
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
 
     if platform.system() == "Windows":
-        addon_root = Path(__file__).parent.parent
-        dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
-        print("dll_path:", dll_path)
-        print("EXISTS:", dll_path.exists())
-        EspeakWrapper.set_library(str(dll_path))
-        print("LIBRARY:", EspeakWrapper.library())
+        espeak = shutil.which("espeak-ng")
+        if espeak is None:
+            raise RuntimeError(
+                "espeak-ng was not found. Please install it and restart Blender."
+            )
+        EspeakWrapper.set_library(espeak)
+        # addon_root = Path(__file__).parent.parent
+        # dll_path = addon_root / "bin" / "windows" / "libespeak-ng.dll"
+
+        # # print("Using espeak DLL:", dll_path)
+
+        # # if not dll_path.exists():
+        # #     raise FileExistsError(dll_path)
+        # EspeakWrapper.set_library(str(dll_path))
 
     elif platform.system() == "Darwin":
         espeak = shutil.which("espeak-ng")
@@ -68,7 +111,8 @@ def main():
     # Initialize important lip sync variables
     viseme_mapping = SET_MAPPING_DICT[settings_dict["viseme_set"]]
     parent_dir = os.path.dirname(file_path)
-    device = "cuda" if (compute_mode == "GPU_COMPUTE" and torch.cuda.is_available()) else "cpu"
+    # device = "cuda" if (compute_mode == "GPU_COMPUTE" and torch.cuda.is_available()) else "cpu"
+    device = "cpu"
 
     # Allow legacy Python dependencies to work on modern NumPy versions
     if not hasattr(np, "NaN"):

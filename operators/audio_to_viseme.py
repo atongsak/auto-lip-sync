@@ -25,7 +25,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
         
         mapped_visemes_dict = get_mapped_visemes(context)
         target_audio_path = get_target_audio_path(context)
-        
+       
         # Check file size of target channel audio wav
         file_size = os.path.getsize(target_audio_path)
         limit_bytes = 25 * 1024 * 1024 # Whisper can handle files <25 MB
@@ -60,6 +60,17 @@ class AudioToVisemeOperator(bpy.types.Operator):
         pipeline_script = addon_root / "pipeline" / "main.py"
 
         print(addon_root)
+
+        # Find Blender's extension-local Python packages
+        extension_pkg = Path.home() / (
+            "Library/Application Support/Blender/5.1/extensions/.local/lib/python3.13/site-packages"
+        )
+
+        print("EXTENSION PACKAGES:", extension_pkg)
+        print("EXISTS:", extension_pkg.exists())
+
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(extension_pkg)
         
         # Execute audio-to-keyframes pipeline
         command = [sys.executable, "-u", "-Xutf8", str(pipeline_script), "--", "--file", str(settings_path), "--compute", settings.compute]
@@ -68,6 +79,7 @@ class AudioToVisemeOperator(bpy.types.Operator):
             command,
             # stdout = subprocess.PIPE, # Save command's output into var instead of printing
             # stderr = subprocess.STDOUT,
+            env=env,
             text = True,
             bufsize = 1
         )
