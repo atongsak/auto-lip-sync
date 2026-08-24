@@ -83,28 +83,28 @@ class AudioToVisemeOperator(bpy.types.Operator):
 
         self.process = subprocess.Popen(
             command,
-            # stdout = subprocess.PIPE, # Save command's output into var instead of printing
-            # stderr = subprocess.STDOUT,
+            stdout = subprocess.PIPE, # Save command's output into var instead of printing
+            stderr = subprocess.STDOUT,
             env=env,
             text = True,
             bufsize = 1
         )
 
         # TODO
-        # self.queue = queue.Queue()
+        self.queue = queue.Queue()
                         
-        # def enqueue_output(pipe, q):
-        #     for line in iter(pipe.readline, ''):
-        #         q.put(line)
-        #     pipe.close()
+        def enqueue_output(pipe, q):
+            for line in iter(pipe.readline, ''):
+                q.put(line)
+            pipe.close()
             
-        # # Create thread to read progress logs from main.py
-        # self.thread = threading.Thread(
-        #     target=enqueue_output,
-        #     args=(self.process.stdout, self.queue),
-        #     daemon=True
-        # )
-        # self.thread.start()
+        # Create thread to read progress logs from main.py
+        self.thread = threading.Thread(
+            target=enqueue_output,
+            args=(self.process.stdout, self.queue),
+            daemon=True
+        )
+        self.thread.start()
         # TODO
                     
         wm = context.window_manager
@@ -269,26 +269,26 @@ class AudioToVisemeOperator(bpy.types.Operator):
             return {'CANCELLED'}
 
         # STEP 1: If subprocess is still running    
-        # # TODO
-        # if event.type == 'TIMER':
-        #     try:
-        #         # Keep consuming and processing print messages in queue until empty
-        #         while True:
-        #             line = self.queue.get_nowait()
-        #             if line.startswith("PROGRESS"):
-        #                 settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
-        #                 for area in context.screen.areas:
-        #                     area.tag_redraw()
-        #             elif line.startswith("MESSAGE"):
-        #                 settings.progress_message = line.removeprefix("MESSAGE:").strip()
-        #             elif line.startswith("STATUS"):
-        #                 self.status = line.removeprefix("STATUS:").strip()
-        #                 print(f"STATUS SET TO: {repr(self.status)}")
-        #             elif line.startswith("TEXT"):
-        #                 self.text.append(line.removeprefix("TEXT:").strip())
-        #                 print(line.strip())
-        #     except queue.Empty:
-        #         pass
+        # TODO
+        if event.type == 'TIMER':
+            try:
+                # Keep consuming and processing print messages in queue until empty
+                while True:
+                    line = self.queue.get_nowait()
+                    if line.startswith("PROGRESS"):
+                        settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
+                        for area in context.screen.areas:
+                            area.tag_redraw()
+                    elif line.startswith("MESSAGE"):
+                        settings.progress_message = line.removeprefix("MESSAGE:").strip()
+                    elif line.startswith("STATUS"):
+                        self.status = line.removeprefix("STATUS:").strip()
+                        print(f"STATUS SET TO: {repr(self.status)}")
+                    elif line.startswith("TEXT"):
+                        self.text.append(line.removeprefix("TEXT:").strip())
+                        print(line.strip())
+            except queue.Empty:
+                pass
             
         # STEP 2: Once the subprocess is finished
         if self.process.poll() is not None and not self.inserting_keyframes: 
