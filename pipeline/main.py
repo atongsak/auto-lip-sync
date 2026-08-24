@@ -52,7 +52,20 @@ def init_espeak():
             "eSpeak NG was not found. Please install it and restart Blender."
         )
     
-    EspeakWrapper.set_library(espeak)
+    if platform.system() == "Windows":
+        espeak_dir = os.path.dirname(espeak)
+        library = os.path.join(espeak_dir, "libespeak-ng.dll")
+
+        if not os.path.isfile(library):
+            print("STATUS:NO_ESPEAK_LIBRARY", flush=True)
+            raise RuntimeError(
+                f"eSpeak NG was found, but libespeak-ng.dll was not found: {library}"
+            )
+        
+        EspeakWrapper.set_library(library)
+
+    elif platform.system() == "Darwin":
+        EspeakWrapper.set_library(espeak)
 
 def parse_args():
     parser = argparse.ArgumentParser()

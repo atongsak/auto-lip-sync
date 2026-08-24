@@ -62,43 +62,49 @@ class AudioToVisemeOperator(bpy.types.Operator):
         print(addon_root)
 
         # Find Blender's extension-local Python packages
-        extension_pkg = Path.home() / (
-            "Library/Application Support/Blender/5.1/extensions/.local/lib/python3.13/site-packages"
+        extensions_dir = bpy.utils.user_resource('EXTENSIONS')
+        py_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+
+        extensions_site_pkgs = os.path.join(
+            extensions_dir,
+            ".local",
+            "lib",
+            py_version,
+            "site-packages"
         )
 
-        print("EXTENSION PACKAGES:", extension_pkg)
-        print("EXISTS:", extension_pkg.exists())
+        print("EXTENSION PACKAGES:", extensions_site_pkgs)
 
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(extension_pkg)
+        env["PYTHONPATH"] = str(extensions_site_pkgs)
         
         # Execute audio-to-keyframes pipeline
         command = [sys.executable, "-u", "-Xutf8", str(pipeline_script), "--", "--file", str(settings_path), "--compute", settings.compute]
 
         self.process = subprocess.Popen(
             command,
-            stdout = subprocess.PIPE, # Save command's output into var instead of printing
-            stderr = subprocess.STDOUT,
+            # stdout = subprocess.PIPE, # Save command's output into var instead of printing
+            # stderr = subprocess.STDOUT,
             env=env,
             text = True,
             bufsize = 1
         )
 
         # TODO
-        self.queue = queue.Queue()
+        # self.queue = queue.Queue()
                         
-        def enqueue_output(pipe, q):
-            for line in iter(pipe.readline, ''):
-                q.put(line)
-            pipe.close()
+        # def enqueue_output(pipe, q):
+        #     for line in iter(pipe.readline, ''):
+        #         q.put(line)
+        #     pipe.close()
             
-        # Create thread to read progress logs from main.py
-        self.thread = threading.Thread(
-            target=enqueue_output,
-            args=(self.process.stdout, self.queue),
-            daemon=True
-        )
-        self.thread.start()
+        # # Create thread to read progress logs from main.py
+        # self.thread = threading.Thread(
+        #     target=enqueue_output,
+        #     args=(self.process.stdout, self.queue),
+        #     daemon=True
+        # )
+        # self.thread.start()
         # TODO
                     
         wm = context.window_manager
@@ -263,43 +269,44 @@ class AudioToVisemeOperator(bpy.types.Operator):
             return {'CANCELLED'}
 
         # STEP 1: If subprocess is still running    
-        # TODO
-        if event.type == 'TIMER':
-            try:
-                # Keep consuming and processing print messages in queue until empty
-                while True:
-                    line = self.queue.get_nowait()
-                    if line.startswith("PROGRESS"):
-                        settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
-                        for area in context.screen.areas:
-                            area.tag_redraw()
-                    elif line.startswith("MESSAGE"):
-                        settings.progress_message = line.removeprefix("MESSAGE:").strip()
-                    elif line.startswith("STATUS"):
-                        self.status = line.removeprefix("STATUS:").strip()
-                        print(f"STATUS SET TO: {repr(self.status)}")
-                    elif line.startswith("TEXT"):
-                        self.text.append(line.removeprefix("TEXT:").strip())
-                        print(line.strip())
-            except queue.Empty:
-                pass
+        # # TODO
+        # if event.type == 'TIMER':
+        #     try:
+        #         # Keep consuming and processing print messages in queue until empty
+        #         while True:
+        #             line = self.queue.get_nowait()
+        #             if line.startswith("PROGRESS"):
+        #                 settings.progress = float(line.split()[1]) * SUBPROCESS_WEIGHT
+        #                 for area in context.screen.areas:
+        #                     area.tag_redraw()
+        #             elif line.startswith("MESSAGE"):
+        #                 settings.progress_message = line.removeprefix("MESSAGE:").strip()
+        #             elif line.startswith("STATUS"):
+        #                 self.status = line.removeprefix("STATUS:").strip()
+        #                 print(f"STATUS SET TO: {repr(self.status)}")
+        #             elif line.startswith("TEXT"):
+        #                 self.text.append(line.removeprefix("TEXT:").strip())
+        #                 print(line.strip())
+        #     except queue.Empty:
+        #         pass
             
         # STEP 2: Once the subprocess is finished
         if self.process.poll() is not None and not self.inserting_keyframes: 
-            if self.status == "NO_WORDS":
+            if self.status:
                 wm.event_timer_remove(self.timer)
                 settings.is_generating = False
+                report_msg = ""
+                
+                if self.status == "NO_WORDS":
+                    report_msg = "No words were detected in the selected audio channel."
+                elif self.status == "NO_ESPEAK":
+                    report_msg = "eSpeak NG was not found. Please install it and restart Blender."
+                elif self.status == "NO_ESPEAK_LIBRARY":
+                    report_msg = "eSpeak NG was found, but libespeak-ng.dll was not found. Please check your eSpeak NG installation."
+                
                 self.report(
                     {'WARNING'},
-                    "No words were detected in the selected audio channel."
-                )
-                return {'CANCELLED'}
-            elif self.status == "NO_ESPEAK":
-                wm.event_timer_remove(self.timer)
-                settings.is_generating = False
-                self.report(
-                    {'WARNING'},
-                    "eSpeak NG was not found. Please install it and restart Blender."
+                    report_msg
                 )
                 return {'CANCELLED'}
 
