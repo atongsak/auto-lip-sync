@@ -16,19 +16,30 @@ Instead of replacing artistic control, this tool is designed to:
 
 ## Key Features
 
+### Platform & Performance
+- Windows x64 and macOS ARM64 support
+- Blender 5.0+ support
+- CPU inference support
+
+### Audio & Transcription
+- Generate lip sync animation from English dialogue (<25 MB)
+- Choose the WhisperX ASR model size
+- Control which audio channel to generate animation for
+
 ### Animation
-- Generate lip sync animation from English dialogue (<25 MB audio)
-- Insert viseme keyframes into Blender's timeline within seconds
-- Clear existing lip sync keyframes before generating a new pass
+- Automatically insert viseme keyframes into the timeline
+- Choose where keyframes are inserted: a specific action or the currently open action
+- Clear existing lip sync keyframes before insertion
 - Automatically close the mouth after a configurable number of frames
 
 ### Rig Support
-- Map visemes to custom pose assets for any pose-based facial rig
+- Map visemes to custom pose assets for pose-based facial rigs
 - Supports both 22-viseme and 15-viseme workflows
 
-### Workflow
-- View the detected transcript when reviewing generated animation
-- FFmpeg and CPU dependency checker
+### Workflow & Setup
+- Review the detected transcript alongside generated animation
+- Built-in FFmpeg, eSpeak NG, and dependency checks
+- Built-in validation for viseme mappings, rigs, and pose assets
 
 ## Planned Features
 - GPU acceleration for faster processing
