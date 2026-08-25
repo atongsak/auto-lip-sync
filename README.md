@@ -17,39 +17,39 @@ Instead of replacing artistic control, this tool is designed to:
 ## Key Features
 
 ### Platform & Performance
-- Windows x64 and macOS ARM64 support
-- Blender 5.0+ support
-- CPU inference support
+- Windows x64 and macOS ARM64
+- Blender 5.0+
+- CPU inference
 
 ### Audio & Transcription
-- Generate lip sync animation from English dialogue (<25 MB)
-- Choose the WhisperX ASR model size
-- Control which audio channel to generate animation for
+- Generate lip sync from English dialogue (<25 MB)
+- Configurable WhisperX ASR model
+- Per-channel audio selection
 
 ### Animation
-- Automatically insert viseme keyframes into the timeline
-- Choose where keyframes are inserted: a specific action or the currently open action
-- Clear existing lip sync keyframes before insertion
-- Automatically close the mouth after a configurable number of frames
+- Automatic viseme keyframe generation
+- Keyframe insertion into custom or active actions
+- Optionally clear existing lip sync keyframes before generation
+- Configurable mouth-closing behavior
 
 ### Rig Support
-- Map visemes to custom pose assets for pose-based facial rigs
-- Supports both 22-viseme and 15-viseme workflows
+- Custom pose-based facial rig mapping
+- 22-viseme and 15-viseme workflows
 
 ### Workflow & Setup
 - Review the detected transcript alongside generated animation
-- Built-in FFmpeg, eSpeak NG, and dependency checks
-- Built-in validation for viseme mappings, rigs, and pose assets
+- Built-in dependency and FFmpeg/eSpeak NG checks
+- Built-in rig and viseme validation
 
 ## Planned Features
-- GPU acceleration for faster processing
+- GPU support for faster processing
 - Volume-based jaw amplitude controls
 - Support for 2D animation image-plane reference workflows
 
 ## Setup
 
 ### Requirements
-- Blender **5.0 or newer**
+- Blender **5.0+**
 - Windows or macOS
 - FFmpeg (all platforms)
 - eSpeak NG (all platforms)
@@ -70,7 +70,7 @@ Install **eSpeak NG** from the official [eSpeak NG Releases](https://github.com/
 2. Double-click the downloaded `.msi` file to launch the installer.
 3. Follow the setup wizard and click Install to complete the installation.
 
-#### Mac
+#### macOS
 Install **FFmpeg** and **eSpeak NG** using Homebrew:
 ```
 brew install espeak-ng
@@ -78,7 +78,7 @@ brew install ffmpeg
 ```
 
 ### 1. Install the Add-on
-Download the latest ZIP archive from the **Releases** page. In Blender 5.0 or later, open **Edit → Preferences → Add-ons**, click ▼ in the top-right corner, select **Install from Disk…**, and choose the downloaded ZIP file.
+Download the latest ZIP archive for your operating system from the **Releases** page. In Blender 5.0 or later, open **Edit → Preferences → Add-ons**, click ▼ in the top-right corner, select **Install from Disk…**, and choose the downloaded ZIP file.
 
 ## Contact
 Annette Tongsak (annettetongsak@gmail.com)
