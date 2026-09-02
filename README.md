@@ -53,7 +53,7 @@ Instead of replacing artistic control, this tool is designed to:
 - FFmpeg (all platforms)
 - eSpeak NG (all platforms)
 
-### 0. Install System Dependencies
+### 1. Install System Dependencies
 Before installing the add-on, install the following system dependencies for your operating system.
 
 #### Windows
@@ -76,7 +76,7 @@ brew install espeak-ng
 brew install ffmpeg
 ```
 
-### 1. Install the Add-on
+### 2. Install the Add-on
 Download the latest ZIP archive for your operating system from the **Releases** page. In Blender 5.0 or later, open **Edit → Preferences → Add-ons**, click ▼ in the top-right corner, select **Install from Disk…**, and choose the downloaded ZIP file.
 
 ## Contact
