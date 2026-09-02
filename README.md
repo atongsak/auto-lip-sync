@@ -20,11 +20,6 @@ Instead of replacing artistic control, this tool is designed to:
 
 ## Key Features
 
-### Platform & Performance
-- Windows x64 and macOS ARM64
-- Blender 5.0+
-- CPU inference
-
 ### Audio & Transcription
 - Generate lip sync from English dialogue (<25 MB)
 - Configurable WhisperX ASR model
