@@ -8,6 +8,10 @@ Animating lip sync is a repetitive and time-consuming process in character anima
 
 This project accelerates that workflow by combining artist-defined viseme-pose asset mappings and audio with automatic speech recognition, forced alignment, and phoneme processing to produce a usable animation pass directly inside Blender.
 
+https://github.com/user-attachments/assets/672ce5b9-3f54-4b5d-956e-69444b191371
+
+Storm Rig (CC) Blender Foundation | [studio.blender.org](https://studio.blender.org)
+
 ## An Animator-Oriented Approach
 Instead of replacing artistic control, this tool is designed to:
 - Reduce the manual workload of lip sync animation
