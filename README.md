@@ -77,7 +77,7 @@ brew install ffmpeg
 ```
 
 ### 2. Install the Add-on
-Download the latest ZIP archive for your operating system from the **Releases** page. In Blender 5.0 or later, open **Edit → Preferences → Add-ons**, click ▼ in the top-right corner, select **Install from Disk…**, and choose the downloaded ZIP file.
+Download the latest ZIP archive for your operating system from the [Releases](https://github.com/atongsak/auto-lip-sync/releases) page. In Blender 5.0 or later, open **Edit → Preferences → Add-ons**, click ▼ in the top-right corner, select **Install from Disk…**, and choose the downloaded ZIP file.
 
 ## Contact
 Annette Tongsak (annettetongsak@gmail.com)
